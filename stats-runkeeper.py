@@ -74,7 +74,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("distance_tot.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[55]:
@@ -113,7 +113,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("distance_moyenne.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[56]:
@@ -157,7 +157,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("rythme.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[59]:
@@ -201,7 +201,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("duree_tot.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[57]:
@@ -240,7 +240,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("duree_moyenne.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[60]:
@@ -278,7 +278,7 @@ fig.update_layout(
     )]
 )
 fig.write_html("activite.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[51]:
@@ -290,7 +290,7 @@ fig.update_layout(
     title="Categories"
 )
 fig.write_html("categories.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[52]:
@@ -305,7 +305,7 @@ fig.update_yaxes(title="km",row=1,col=1)
 fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
 fig.update_yaxes(tickformat="%dj %H:%M:%S",row=2,col=1)
 fig.write_html("bycategorie.html",include_plotlyjs='cdn')
-fig
+# fig
 
 
 # In[ ]:
