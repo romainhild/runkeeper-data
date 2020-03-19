@@ -3,3 +3,6 @@
 
 # Undo-tree save-files
 *.~undo-tree
+
+*.html
+runkeeper-data
