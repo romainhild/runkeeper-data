@@ -6,3 +6,5 @@
 
 *.html
 runkeeper-data
+index.php
+script-*.js
