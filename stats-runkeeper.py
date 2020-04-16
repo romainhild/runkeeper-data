@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[44]:
+# In[1]:
 
 
 import pandas as pd
@@ -30,54 +30,60 @@ dfy = df.groupby(df.Date.dt.to_period("Y")).agg([('mean',lambda x: x.mean(numeri
 dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)), 
                                     ('sum', lambda x: x.sum(numeric_only=False)),
                                     ('count', 'count')])
-#df.head()
+#df["distance_14d"] = df["Distance (km)"].rolling(window=5,center=True).mean()
+#df["Average Speed (km/h)"].rolling(window=5,center=True).mean()
+
+#df["distance_14d"] = df.set_index("Date")["Distance (km)"]#.rolling(window='5D').mean()
+#df
 
 
-# In[54]:
+# In[2]:
 
 
 fig = go.Figure()
-fig.add_bar(x=df["Date"],y=df["Distance (km)"])
-fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Distance (km)"]["sum"],visible=False)
-fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Distance (km)"]["sum"],visible=False)
-fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Distance (km)"]["sum"],visible=False)
+fig.add_bar(x=df["Date"],y=df["Distance (km)"],name="distance")
+fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Distance (km)"]["sum"],name="distance",visible=False)
+fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Distance (km)"]["sum"],name="distance",visible=False)
+fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Distance (km)"]["sum"],name="distance",visible=False)
 fig.update_layout(
     xaxis_rangeslider_visible=True,
     xaxis_type="date",
     yaxis_title="km",
     title="Distance totale",
-    updatemenus = [dict(
-        x = 1,
-        y = 1.15,
-        yanchor = 'top',
-        active = 0,
-        showactive = True,
-        buttons = [
+    updatemenus = [
         dict(
-            args = ['visible', [i == 0 for i in range(0,4)]],
-            label = 'Activité',
-            method = 'restyle',
-        ), dict(
-            args = ['visible', [i == 1 for i in range(0,4)]],
-            label = 'Semaine',
-            method = 'restyle',
-        ), dict(
-            args = ['visible', [i == 2 for i in range(0,4)]],
-            label = 'Mois',
-            method = 'restyle',
-        ), dict(
-            args = ['visible', [i == 3 for i in range(0,4)]],
-            label = 'Année',
-            method = 'restyle',
+            x = 1,
+            y = 1.15,
+            yanchor = 'top',
+            active = 0,
+            showactive = True,
+            buttons = [
+                dict(
+                    args = ['visible', [i == 0 for i in range(0,4)]],
+                    label = 'Activité',
+                    method = 'restyle',
+                ), dict(
+                    args = ['visible', [i == 1 for i in range(0,4)]],
+                    label = 'Semaine',
+                    method = 'restyle',
+                ), dict(
+                    args = ['visible', [i == 2 for i in range(0,4)]],
+                    label = 'Mois',
+                    method = 'restyle',
+                ), dict(
+                    args = ['visible', [i == 3 for i in range(0,4)]],
+                    label = 'Année',
+                    method = 'restyle',
+                )
+            ]
         )
-        ]
-    )]
+    ]
 )
 fig.write_html("distance_tot.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[55]:
+# In[3]:
 
 
 fig = go.Figure()
@@ -113,17 +119,17 @@ fig.update_layout(
     )]
 )
 fig.write_html("distance_moyenne.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[56]:
+# In[4]:
 
 
 fig = go.Figure()
-fig.add_bar(x=df["Date"],y=df["Average Pace"]+pd.to_datetime('1970/01/01'))
-fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),visible=False)
-fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),visible=False)
-fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),visible=False)
+fig.add_bar(x=df["Date"],y=df["Average Pace"]+pd.to_datetime('1970/01/01'),name="rythme")
+fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),name="rythme",visible=False)
+fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),name="rythme",visible=False)
+fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Average Pace"]["mean"]+pd.to_datetime('1970/01/01'),name="rythme",visible=False)
 fig.update_layout(
     xaxis_rangeslider_visible=True,
     xaxis_type="date",
@@ -157,17 +163,24 @@ fig.update_layout(
     )]
 )
 fig.write_html("rythme.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[56]:
+# In[5]:
 
 
 fig = go.Figure()
-fig.add_bar(x=df["Date"],y=df["Average Speed (km/h)"])
-fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Average Speed (km/h)"]["mean"],visible=False)
-fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Average Speed (km/h)"]["mean"],visible=False)
-fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Average Speed (km/h)"]["mean"],visible=False)
+fig.add_bar(x=df["Date"],y=df["Average Speed (km/h)"],name="vitesse")
+fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Average Speed (km/h)"]["mean"],name="vitesse",visible=False)
+fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Average Speed (km/h)"]["mean"],name="vitesse",visible=False)
+fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Average Speed (km/h)"]["mean"],name="vitesse",visible=False)
+
+step=5
+fig.add_scatter(x=df["Date"],y=df["Average Speed (km/h)"].rolling(window=step,center=True).mean(),name="moyenne ("+str(step)+")")
+fig.add_scatter(x=dfw.index.to_timestamp(),y=dfw["Average Speed (km/h)"]["mean"].rolling(window=step,center=True).mean(),name="moyenne ("+str(step)+")",visible=False)
+step=3
+fig.add_scatter(x=dfm.index.to_timestamp(),y=dfm["Average Speed (km/h)"]["mean"].rolling(window=step,center=True).mean(),name="moyenne ("+str(step)+")",visible=False)
+
 fig.update_layout(
     xaxis_rangeslider_visible=True,
     xaxis_type="date",
@@ -181,19 +194,19 @@ fig.update_layout(
         showactive = True,
         buttons = [
         dict(
-            args = ['visible', [i == 0 for i in range(0,4)]],
+            args = ['visible', [i == 0 or i == 4 for i in range(0,7)]],
             label = 'Activité',
             method = 'restyle',
         ), dict(
-            args = ['visible', [i == 1 for i in range(0,4)]],
+            args = ['visible', [i == 1 or i == 5 for i in range(0,7)]],
             label = 'Semaine',
             method = 'restyle',
         ), dict(
-            args = ['visible', [i == 2 for i in range(0,4)]],
+            args = ['visible', [i == 2 or i == 6 for i in range(0,7)]],
             label = 'Mois',
             method = 'restyle',
         ), dict(
-            args = ['visible', [i == 3 for i in range(0,4)]],
+            args = ['visible', [i == 3 for i in range(0,7)]],
             label = 'Année',
             method = 'restyle',
         )
@@ -201,10 +214,10 @@ fig.update_layout(
     )]
 )
 fig.write_html("vitesse.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[59]:
+# In[6]:
 
 
 fig = go.Figure()
@@ -245,10 +258,10 @@ fig.update_layout(
     )]
 )
 fig.write_html("duree_tot.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[57]:
+# In[7]:
 
 
 fig = go.Figure()
@@ -284,10 +297,10 @@ fig.update_layout(
     )]
 )
 fig.write_html("duree_moyenne.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[60]:
+# In[8]:
 
 
 fig = go.Figure()
@@ -322,10 +335,10 @@ fig.update_layout(
     )]
 )
 fig.write_html("activite.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[51]:
+# In[9]:
 
 
 fig = go.Figure()
@@ -334,10 +347,10 @@ fig.update_layout(
     title="Categories"
 )
 fig.write_html("categories.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
-# In[52]:
+# In[10]:
 
 
 fig = make_subplots(rows=2, cols=2, subplot_titles=("Distance", "Rythme", "Durée", "Activités"))
@@ -349,7 +362,7 @@ fig.update_yaxes(title="km",row=1,col=1)
 fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
 fig.update_yaxes(tickformat="%dj %H:%M:%S",row=2,col=1)
 fig.write_html("bycategorie.html",include_plotlyjs='cdn')
-# fig
+#fig
 
 
 # In[ ]:
