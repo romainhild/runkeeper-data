@@ -8,7 +8,6 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.css">
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.js"></script>
-    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.min.js"></script>
     <script src="https://cdn.datatables.net/plug-ins/1.10.20/sorting/datetime-moment.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
@@ -20,7 +19,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.4.0/gpx.min.js"></script>
   </head>
   <body>
+    <h1>Runkeeper Data</h1>
     <object data="rythme.html" width="100%" height="100%"></object>
+    <object data="vitesse.html" width="100%" height="100%"></object>
     <object data="distance_tot.html" width="100%" height="100%"></object>
     <object data="distance_moyenne.html" width="100%" height="100%"></object>
     <object data="duree_tot.html" width="100%" height="100%"></object>
@@ -68,7 +69,13 @@
       </div>
     </div>
 
-    <script type='text/javascript' src='script.js'></script>
+    <script type="text/javascript" language="javascript">
+      var versionUpdate = (new Date()).getTime();
+      var script = document.createElement("script");
+      script.type = "text/javascript";
+      script.src = "script.js?v=" + versionUpdate;
+      document.body.appendChild(script);
+    </script>
 
   </body>
 </html>

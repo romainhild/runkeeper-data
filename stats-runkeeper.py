@@ -10,7 +10,7 @@ import scipy as sp
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-df = pd.read_csv("cardioActivities.csv")
+df = pd.read_csv("runkeeper-data/cardioActivities.csv")
 df["Date"] = pd.to_datetime(df["Date"])
 df["Duration"] = df["Duration"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
 df["Duration"] = pd.to_timedelta(df["Duration"])
@@ -157,6 +157,50 @@ fig.update_layout(
     )]
 )
 fig.write_html("rythme.html",include_plotlyjs='cdn')
+# fig
+
+
+# In[56]:
+
+
+fig = go.Figure()
+fig.add_bar(x=df["Date"],y=df["Average Speed (km/h)"])
+fig.add_bar(x=dfw.index.to_timestamp(),y=dfw["Average Speed (km/h)"]["mean"],visible=False)
+fig.add_bar(x=dfm.index.to_timestamp(),y=dfm["Average Speed (km/h)"]["mean"],visible=False)
+fig.add_bar(x=dfy.index.to_timestamp(),y=dfy["Average Speed (km/h)"]["mean"],visible=False)
+fig.update_layout(
+    xaxis_rangeslider_visible=True,
+    xaxis_type="date",
+    yaxis_title="km/h",
+    title="Vitesse",
+    updatemenus = [dict(
+        x = 1,
+        y = 1.15,
+        yanchor = 'top',
+        active = 0,
+        showactive = True,
+        buttons = [
+        dict(
+            args = ['visible', [i == 0 for i in range(0,4)]],
+            label = 'Activité',
+            method = 'restyle',
+        ), dict(
+            args = ['visible', [i == 1 for i in range(0,4)]],
+            label = 'Semaine',
+            method = 'restyle',
+        ), dict(
+            args = ['visible', [i == 2 for i in range(0,4)]],
+            label = 'Mois',
+            method = 'restyle',
+        ), dict(
+            args = ['visible', [i == 3 for i in range(0,4)]],
+            label = 'Année',
+            method = 'restyle',
+        )
+        ]
+    )]
+)
+fig.write_html("vitesse.html",include_plotlyjs='cdn')
 # fig
 
 

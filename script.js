@@ -23,6 +23,8 @@ Papa.parse('runkeeper-data/cardioActivities.csv', {
 		  title: "Distance" },
 		{ data: "Average Pace",
 		  title: "Rythme" },
+	    	{ data: "Average Speed (km/h)",
+		  title: "Vitesse" },
 	    	{ data: "Duration",
 		  title: "Durée" },
 		{ data: "category" },
@@ -75,6 +77,17 @@ Papa.parse('runkeeper-data/cardioActivities.csv', {
 		{
 		    "targets": 4,
 		    "render": function(data, type, full, meta) {
+			if( type == 'display' && data ) {
+			    return data + ' km/h';
+			}
+			else {
+			    return data;
+			}
+		    }
+		},
+		{
+		    "targets": 5,
+		    "render": function(data, type, full, meta) {
 			if (type == 'sort') {
 			    if (data) {
 			    	var mDate = moment(data, ["H:mm:ss","mm:ss","m:ss"]);
@@ -101,29 +114,28 @@ Papa.parse('runkeeper-data/cardioActivities.csv', {
 		    }
 		},
 		{
-		    "targets":[5,6],
+		    "targets":[6,7],
 		    "visible": false
 		}
 	    ]   
 	} );
 	$('#filter-all').on('click', function () {
-	    console.log("all");
-	    dataTables.columns(5).search("").draw();
+	    dataTables.columns(6).search("").draw();
 	});
 	$('#filter-0').on('click', function () {
-	    dataTables.columns(5).search("0-4" ).draw();
+	    dataTables.columns(6).search("0-4" ).draw();
 	});
 	$('#filter-1').on('click', function () {
-	    dataTables.columns(5).search("4-8" ).draw();
+	    dataTables.columns(6).search("4-8" ).draw();
 	});
 	$('#filter-2').on('click', function () {
-	    dataTables.columns(5).search("8-12" ).draw();
+	    dataTables.columns(6).search("8-12" ).draw();
 	});
 	$('#filter-3').on('click', function () {
-	    dataTables.columns(5).search("12-16" ).draw();
+	    dataTables.columns(6).search("12-16" ).draw();
 	});
 	$('#filter-4').on('click', function () {
-	    dataTables.columns(5).search("16-20" ).draw();
+	    dataTables.columns(6).search("16-20" ).draw();
 	});
 
 	dataTables.on( 'order.dt search.dt', function () {
