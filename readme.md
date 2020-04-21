@@ -1,21 +1,18 @@
-Web page to display statistics on Runkeeper data
+# Web page to display statistics on Runkeeper data
 
 First, install plotly, with for example conda:
-[shell]
-----
-conda create -n runkeeper-data python="3.8"
-conda activate runkeeper-data
-conda install -c plotly numpy pandas scipy plotly chart_studio
-----
+
+    conda create -n runkeeper-data python="3.8"
+    conda activate runkeeper-data
+    conda install -c plotly numpy pandas scipy plotly chart_studio
 
 then get the address to download your data in your Runkeeper account, and run
-[shell]
-----
-./dl-data <address>
-----
+
+    ./dl-data <address>
+
 This will generate html files using plotly for the graphs, a javascript file for the table and a php file to access them.
 
 Alternatively, you can watch the graphs using the jupyter notebook.
 
-image::rythme.jpg[Rythme]
-image::table.jpg[Table]
+![Rythme](rythme.png)
+![Table](table.jpg)
