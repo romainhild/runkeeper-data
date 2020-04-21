@@ -14,5 +14,10 @@ This will generate html files using plotly for the graphs, a javascript file for
 
 Alternatively, you can watch the graphs using the jupyter notebook.
 
+A graph look like this:
+
 ![Rythme](rythme.png)
-![Table](table.jpg)
+
+The searchable table, where each row can display the map:
+
+![Table](table.png)
