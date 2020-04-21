@@ -16,3 +16,6 @@ then get the address to download your data in your Runkeeper account, and run
 This will generate html files using plotly for the graphs, a javascript file for the table and a php file to access them.
 
 Alternatively, you can watch the graphs using the jupyter notebook.
+
+image::rythme.jpg[Rythme]
+image::table.jpg[Table]
