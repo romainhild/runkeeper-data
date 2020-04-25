@@ -8,3 +8,6 @@
 runkeeper-data
 index.php
 script-*.js
+
+# mapbox token
+.mapbox_token
