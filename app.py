@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import os.path
+import math
+
 import dash
 import dash_table
 import dash_core_components as dcc
@@ -79,6 +82,13 @@ fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="Activités"
 fig.update_yaxes(title="km",row=1,col=1)
 fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
 fig.update_yaxes(tickformat="%dj %H:%M:%S",row=2,col=1)
+
+# meter per pixel at zoom level 0 by latitude
+x = np.array([0,20,40,60,80])
+y = np.array([78271,73551,59959,39135,13591])
+z = np.polyfit(x, y, 3)
+mp0 = np.poly1d(z)
+
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[external_stylesheets,dbc.themes.BOOTSTRAP])
@@ -260,7 +270,7 @@ app.layout = dbc.Container([
         id='table',
         columns=[{ 'name':v['name'], 'id':k} for k,v in tables.items()],
         data=df.to_dict('records'),
-        row_selectable='single',
+        row_selectable='multi',
         page_current=0,
         page_size=pageSize,
         page_action='custom',
@@ -306,21 +316,63 @@ def displayModal(n_open,n_close,is_open,dff,rows):
         return [False,"",""]
     if n_open and not rows:
         return [True,"Attention","Veuillez selectionner au moins une course pour afficher plus d'informations."]
-    if not dff[rows[0]]['GPX File']:
-        return [True,"Course du " + dff[rows[0]]['Date_str'], "Pas de données pour cette course..."]
 
-    gpx_file = open('runkeeper-data/'+dff[rows[0]]['GPX File'],'r')
-    gpx = gpxpy.parse(gpx_file)
-    track = gpx.tracks[0]
-    datamap=[]
-    for seg in track.segments:
-        d = {'type':'scattermapbox','mode':'markers+lines'}
-        d['lon'] = list(map(lambda trkpt: trkpt.longitude, seg.points))
-        d['lat'] = list(map(lambda trkpt: trkpt.latitude, seg.points))
-        datamap.append(d)
-        datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[0].longitude],'lat':[seg.points[0].latitude],'marker':{'size':8,'color':'green'}})
-        datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[-1].longitude],'lat':[seg.points[-1].latitude],'marker':{'size':8,'color':'red'}})
+    children = []
+    dates = []
+    gpxfiles = []
+    datamap = []
 
+    for i in rows:
+        if not dff[i]['GPX File']:
+            children.append(html.Div("Pas de données pour la course du "+dff[i]['Date_str']))
+        else:
+            gpxfiles.append(dff[i]['GPX File'])
+        dates.append(dff[i]['Date_str'])
+    if not gpxfiles:
+        return [True,"Attention", children]
+
+    if len(dates) == 1:
+        title = "Course du " + dates[0]
+    else:
+        title = "Courses du " + dates[0]
+        for i in range(1,len(dates)-1):
+            title =  title + ', ' + dates[i]
+        title = title + ' et du ' + dates[-1]
+
+    maxLat = -float('inf')
+    maxLon = -float('inf')
+    minLat = float('inf')
+    minLon = float('inf')
+    for f in gpxfiles:
+        date = os.path.splitext(os.path.basename(f))[0]
+        gpx_file = open('runkeeper-data/'+f,'r')
+        gpx = gpxpy.parse(gpx_file)
+        track = gpx.tracks[0]
+        if track.get_bounds().min_latitude < minLat:
+            minLat = track.get_bounds().min_latitude
+        if track.get_bounds().min_longitude < minLon:
+            minLon = track.get_bounds().min_longitude
+        if track.get_bounds().max_latitude > maxLat:
+            maxLat = track.get_bounds().max_latitude
+        if track.get_bounds().max_longitude > maxLon:
+            maxLon = track.get_bounds().max_longitude 
+            
+        for seg in track.segments:
+            d = {'type':'scattermapbox','mode':'markers+lines','name':date}
+            d['lon'] = list(map(lambda trkpt: trkpt.longitude, seg.points))
+            d['lat'] = list(map(lambda trkpt: trkpt.latitude, seg.points))
+            datamap.append(d)
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[0].longitude],'lat':[seg.points[0].latitude],'marker':{'size':8,'color':'green'},'name':'start'})
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[-1].longitude],'lat':[seg.points[-1].latitude],'marker':{'size':8,'color':'red'},'name':'finish'})
+
+    dx = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(maxLat,minLon))
+    dy = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(minLat,maxLon))
+    npx = 800 # number of pixel on the graph on MY screen !!
+    npy = 300
+    zoomx = math.log2(mp0(minLat+(maxLat-minLat)/2)*npx/dx) # we fit mp0(lat)/(2**z) meter/pixel at zoom level z and latitude lat
+    zoomy = math.log2(mp0(minLat+(maxLat-minLat)/2)*npy/dy)
+    zoom = min(zoomx,zoomy)
+    
     graph = dcc.Graph(
         id='map',
         figure={
@@ -330,16 +382,20 @@ def displayModal(n_open,n_close,is_open,dff,rows):
                     'style':'basic',
                     'accesstoken':token,
                     'center': {
-                        'lat':track.get_bounds().min_latitude+(track.get_bounds().max_latitude-track.get_bounds().min_latitude)/2,
-                        'lon':track.get_bounds().min_longitude+(track.get_bounds().max_longitude-track.get_bounds().min_longitude)/2
+                        'lat':minLat+(maxLat-minLat)/2,
+                        'lon':minLon+(maxLon-minLon)/2
                     },
-                    'zoom':13
+                    'zoom':zoom
                 },
-                'showlegend':False
+                'margin': {
+                    't':50
+                },
+                'showlegend':len(datamap)>1
             }
         }
     )
-    return [True, "Course du " + dff[rows[0]]['Date_str'], graph]
+    children.append(graph)
+    return [True, title, children]
 
 @app.callback(
     [dash.dependencies.Output('table', 'data'),
