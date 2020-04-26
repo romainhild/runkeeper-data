@@ -21,7 +21,6 @@ locale.setlocale(locale.LC_ALL, 'fr_FR')
 
 df = pd.read_csv("runkeeper-data/cardioActivities.csv")
 df["Rank"] = range(1, len(df)+1)
-# df["Date_str"] = df["Date"]
 df["Date"] = pd.to_datetime(df["Date"])
 df["Date_str"] = df["Date"].dt.strftime('%A %d %B %Y %H:%M')
 df["Duration_str"] = df["Duration"]
@@ -225,17 +224,36 @@ app.layout = dbc.Container([
                         clearable=False
                     )
                 ]),
-                width=4
+                width=3
             ),
             dbc.Col(
                 dbc.FormGroup([
                     dbc.Label("Filtre:", html_for="filter-in"),
                     dbc.Input(id='filter-in')
                 ]),
-                width=8
+                width=6
+            ),
+            dbc.Col(
+                html.Div(
+                    dbc.FormGroup([
+                        dbc.Button("Plus d'infos", id='info-bt'),
+                    ]),
+                    className='text-center'
+                ),
+                width=2
+            ),
+            dbc.Col(
+                html.Div(
+                    dbc.FormGroup([
+                        dbc.Button("Reset", id='clear-bt')
+                    ]),
+                    className='text-center'
+                ),
+                width=1
             )
         ],
-        form=True
+        form=True,
+        align="end"
     ),
 
     dash_table.DataTable(
@@ -267,17 +285,27 @@ app.layout = dbc.Container([
 ])
 
 @app.callback(
+    dash.dependencies.Output('table','selected_rows'),
+    [dash.dependencies.Input('clear-bt','n_clicks')]
+)
+def clearSelection(n):
+    return []
+
+@app.callback(
     [dash.dependencies.Output('modal','is_open'),
      dash.dependencies.Output('modal-header','children'),
      dash.dependencies.Output('modal-body','children')],
-    [dash.dependencies.Input('table','selected_rows'),
+    [dash.dependencies.Input('info-bt','n_clicks'),
      dash.dependencies.Input('close','n_clicks')],
     [dash.dependencies.State('modal','is_open'),
-     dash.dependencies.State('table','data')]
+     dash.dependencies.State('table','data'),
+     dash.dependencies.State('table','selected_rows')]
 )
-def displayModal(rows,n,is_open,dff):
-    if is_open or not rows:
+def displayModal(n_open,n_close,is_open,dff,rows):
+    if is_open or not n_open:
         return [False,"",""]
+    if n_open and not rows:
+        return [True,"Attention","Veuillez selectionner au moins une course pour afficher plus d'informations."]
     if not dff[rows[0]]['GPX File']:
         return [True,"Course du " + dff[rows[0]]['Date_str'], "Pas de données pour cette course..."]
 
@@ -315,7 +343,7 @@ def displayModal(rows,n,is_open,dff):
 
 @app.callback(
     [dash.dependencies.Output('table', 'data'),
-     dash.dependencies.Output('table','selected_rows')],
+     dash.dependencies.Output('clear-bt','n_clicks')],
     [dash.dependencies.Input('table', "page_current"),
      dash.dependencies.Input('table', "page_size"),
      dash.dependencies.Input('table', 'sort_by'),
@@ -346,7 +374,7 @@ def update_table(page_current, page_size, sort_by, filter_by, by_cat):
 
     return [dff.iloc[
         page_current*page_size:(page_current+ 1)*page_size
-    ].to_dict('records'),[]]
+    ].to_dict('records'),1]
 
 
 @app.callback(
