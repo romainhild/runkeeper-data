@@ -489,7 +489,8 @@ def update_graph(time,window,nomean,stat):
         'xaxis': {
             'type':'date',
             'rangeslider': {'visible':True},
-            'hoverformat': period[time]['text']
+            'hoverformat': period[time]['text'],
+            "uirevision":time
         },
         "yaxis": { "title":statistiques[stat]['unit'] },
         'margin':{'r':0,'t':100,'b':50},
