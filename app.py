@@ -21,6 +21,7 @@ import gpxpy
 
 import locale
 locale.setlocale(locale.LC_ALL, 'fr_FR')
+config_plot={'locale':'fr'}
 
 df = pd.read_csv("runkeeper-data/cardioActivities.csv")
 df["Rank"] = range(1, len(df)+1)
@@ -50,16 +51,21 @@ dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)
                                     ('sum', lambda x: x.sum(numeric_only=False)),
                                     ('count', 'count')])
 dff = { 'A':df, 'S':dfw, 'M':dfm, 'Y':dfy }
-
+period = {
+    'A': { 'data':df, 'label':'Activité', 'text':'Activité du %d/%m/%Y'},
+    'S': { 'data':dfw, 'label':'Semaine', 'text':'Semaine du %d/%m/%Y'},
+    'M': { 'data':dfm, 'label':'Mois', 'text':'Mois de %B %Y'},
+    'Y': { 'data':dfy, 'label':'Année', 'text':'Année %Y'}
+}
 statistiques = {
-    'S': {'label':'Vitesse','key':'Average Speed (km/h)','unit':'km/h','agg':'mean'},
-    'R': {'label':'Rythme','key':'Average Pace','unit':'min/km','agg':'mean'},
-    'Dut': {'label':'Durée totale','key':'Duration','unit':'temps','agg':'sum'},
-    'Dum': {'label':'Durée moyenne','key':'Duration','unit':'temps','agg':'mean'},
-    'Dit': {'label':'Distance totale','key':'Distance (km)','unit':'km','agg':'sum'},
-    'Dim': {'label':'Distance moyenne','key':'Distance (km)','unit':'km','agg':'mean'},
-    'A': {'label':'Activités','key':'Duration','unit':'','agg':'count'}
-    }
+    'S': {'label':'Vitesse','key':'Average Speed (km/h)','unit':'km/h','agg':'mean','type':'float'},
+    'R': {'label':'Rythme','key':'Average Pace','unit':'min/km','agg':'mean','type':'time'},
+    'Dut': {'label':'Durée totale','key':'Duration','unit':'','agg':'sum','type':'time'},
+    'Dum': {'label':'Durée moyenne','key':'Duration','unit':'','agg':'mean','type':'time'},
+    'Dit': {'label':'Distance totale','key':'Distance (km)','unit':'km','agg':'sum','type':'float'},
+    'Dim': {'label':'Distance moyenne','key':'Distance (km)','unit':'km','agg':'mean','type':'float'},
+    'A': {'label':'Activités','key':'Duration','unit':'','agg':'count','type':'int'}
+}
 tables = {
     'Rank': {'sort':'Rank','name':'Rang','suffix':''},
     'Date_str': {'sort':'Date','name':'Date','suffix':''},
@@ -81,7 +87,7 @@ fig.add_bar(x=dfc.index,y=dfc["Duration"]["sum"].dt.total_seconds()/3600,row=2,c
 fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="",hovertemplate='Categorie: %{x} km<br>Activités: %{y}')
 fig.update_yaxes(title="km",row=1,col=1)
 fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
-fig.update_yaxes(title="heure",row=2,col=1)
+fig.update_yaxes(title="heure",ticksuffix="h",row=2,col=1)
 fig.update_layout(showlegend=False,margin={'t':50,'r':0,'l':0,'b':50})
 
 # meter per pixel at zoom level 0 by latitude
@@ -90,8 +96,8 @@ y = np.array([78271,73551,59959,39135,13591])
 z = np.polyfit(x, y, 3)
 mp0 = np.poly1d(z)
 
-
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+external_scripts = ['https://cdn.plot.ly/plotly-locale-fr-latest.js']
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP],external_scripts=external_scripts)
 
 
 app.layout = dbc.Container([
@@ -132,12 +138,7 @@ app.layout = dbc.Container([
                                                 dbc.Label("Par", html_for="time-rd"),
                                                 dbc.RadioItems(
                                                     id='time-rd',
-                                                    options=[
-                                                        {'label':'Activité', 'value':'A'},
-                                                        {'label':'Semaine', 'value':'S'},
-                                                        {'label':'Mois', 'value':'M'},
-                                                        {'label':'Année', 'value':'Y'}
-                                                    ],
+                                                    options=[{'label':period[p]['label'], 'value':p} for p in period],
                                                     value='A'
                                                 )
                                             ]
@@ -186,7 +187,7 @@ app.layout = dbc.Container([
                 ],
                 width=4
             ),
-            dbc.Col(dcc.Graph(id='example-graph'),width=8)
+            dbc.Col(dcc.Graph(id='example-graph',config=config_plot),width=8)
         ],
         align='center'
     ),
@@ -476,10 +477,10 @@ def setMeanValue(mean):
     ],
     [dash.dependencies.State('stat-rd','value')]
 )
-def update_graph(time,window,mean,stat):
-    dft = dff[time]
+def update_graph(time,window,nomean,stat):
+    dft = period[time]['data']
     x = dft["Date"] if time == 'A' else dft.index.to_timestamp()
-    data = [{'x':x, 'type':'bar'}]
+    data = [{'x':x, 'type':'bar','name':''}]
     y = dft[statistiques[stat]['key']]
     if time != 'A':
         y = y[statistiques[stat]['agg']]
@@ -487,29 +488,56 @@ def update_graph(time,window,mean,stat):
         'showlegend':False,
         'xaxis': {
             'type':'date',
-            'rangeslider': {'visible':True}
+            'rangeslider': {'visible':True},
+            'hoverformat': period[time]['text']
         },
         "yaxis": { "title":statistiques[stat]['unit'] },
-        'margin':{'r':0,'t':50}
+        'margin':{'r':0,'t':100,'b':50},
+        'title':statistiques[stat]['label'],
+        'hovermode':'x unified'
     }
-    if stat == "R":
-        y1 = y+pd.to_datetime('1970/01/01')
-        layout['yaxis']['tickformat'] = "%M:%S"
-    elif stat == "Dum":
-        y1 = y+pd.to_datetime('1970/01/01')
-        layout['yaxis']['tickformat'] = "%H:%M:%S"
-    elif stat == "Dut":
-        y1 = y+pd.to_datetime('1970/01/01')
-        layout['yaxis']['tickformat'] = "%dj %H:%M:%S"
+    if statistiques[stat]['type'] == 'int':
+        hoverformat = "%{y:d}"
+    else:
+        hoverformat = '%{y}'
+    if statistiques[stat]['type'] == 'time':
+        maxtime = y.max(numeric_only=False)
+        if maxtime.total_seconds() < 3600:
+            y1 = y+pd.to_datetime('1970/01/01')
+            layout['yaxis']['tickformat'] = "%M:%S"
+        elif maxtime.total_seconds() < 86400:
+            y1 = y+pd.to_datetime('1970/01/01')
+            layout['yaxis']['tickformat'] = "%H:%M:%S"
+        else:
+            y1 = y.dt.total_seconds()/3600
+            layout['yaxis']['ticksuffix'] = 'h'
+            data[0]['customdata'] = y.dt.components[:][:5].to_numpy()
+            hoverformat = '%{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s'
     else:
         y1 = y
+        layout['yaxis']['tickformat'] = ".2f"
     data[0]['y'] = y1
-    if not mean:
-        if stat == "R" or "Du" in stat:
-            yy = pd.to_timedelta(y.dt.total_seconds().rolling(window=window,center=True).mean(),unit='s')+pd.to_datetime('1970/01/01')
+    data[0]['hovertemplate'] = statistiques[stat]['label'] + ': ' + hoverformat + ' ' + statistiques[stat]['unit']
+
+    if not nomean:
+        d = {'x':x,'name':''}
+        if statistiques[stat]['type'] == 'time':
+            yy = pd.to_timedelta(y.dt.total_seconds().rolling(window=window,center=True).mean(),unit='s')
+            maxtime = y.max(numeric_only=False)
+            if maxtime.total_seconds() >= 86400:
+                d['customdata'] = yy.dt.components[:][:5].to_numpy()
+                yy = yy.dt.total_seconds()/3600
+                hoverformat = '%{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s'
+            else:
+                yy = yy+pd.to_datetime('1970/01/01')
+                hoverformat = '%{y}'
         else:
             yy = y.rolling(window=window,center=True).mean()
-        data.append({'x':x,'y':yy})
+            hoverformat = '%{y}'
+
+        d['y'] = yy
+        d['hovertemplate'] = 'Moyenne sur '+str(window)+' '+period[time]['label'].lower()+('' if window==1 or time == 'M' else 's') + ': '+hoverformat+ ' ' +statistiques[stat]['unit']
+        data.append(d)
     return {
         'data': data,
         'layout': layout
