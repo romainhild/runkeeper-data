@@ -25,7 +25,7 @@ locale.setlocale(locale.LC_ALL, 'fr_FR')
 df = pd.read_csv("runkeeper-data/cardioActivities.csv")
 df["Rank"] = range(1, len(df)+1)
 df["Date"] = pd.to_datetime(df["Date"])
-df["Date_str"] = df["Date"].dt.strftime('%A %d %B %Y %H:%M')
+df["Date_str"] = df["Date"].dt.strftime('%A %d %B %Y à %H:%M')
 df["Duration_str"] = df["Duration"]
 df["Duration"] = df["Duration"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
 df["Duration"] = pd.to_timedelta(df["Duration"])
@@ -75,13 +75,14 @@ for k,v in tables.items():
 pageSize = 100
 
 fig = make_subplots(rows=2, cols=2, subplot_titles=("Distance", "Rythme", "Durée", "Activités"))
-fig.add_bar(x=dfc.index,y=dfc["Distance (km)"]["sum"],row=1,col=1,name="Distance")
-fig.add_bar(x=dfc.index,y=dfc["Average Pace"]["mean"]+ pd.to_datetime('1970/01/01'),row=1,col=2,name='Rythme')
-fig.add_bar(x=dfc.index,y=dfc["Duration"]["sum"]+pd.to_datetime('1970/01/01'),row=2,col=1,name="Durée")
-fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="Activités")
+fig.add_bar(x=dfc.index,y=dfc["Distance (km)"]["sum"],row=1,col=1,name="",hovertemplate='Categorie: %{x} km<br>Distance totale: %{y} km')
+fig.add_bar(x=dfc.index,y=dfc["Average Pace"]["mean"]+ pd.to_datetime('1970/01/01'),row=1,col=2,name='',hovertemplate='Categorie: %{x} km<br>Rythme: %{y} min/km')
+fig.add_bar(x=dfc.index,y=dfc["Duration"]["sum"].dt.total_seconds()/3600,row=2,col=1,name="",hovertemplate='Categorie: %{x} km<br>Durée totale: %{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s',customdata=dfc["Duration"]["sum"].dt.components)
+fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="",hovertemplate='Categorie: %{x} km<br>Activités: %{y}')
 fig.update_yaxes(title="km",row=1,col=1)
 fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
-fig.update_yaxes(tickformat="%dj %H:%M:%S",row=2,col=1)
+fig.update_yaxes(title="heure",row=2,col=1)
+fig.update_layout(showlegend=False,margin={'t':50,'r':0,'l':0,'b':50})
 
 # meter per pixel at zoom level 0 by latitude
 x = np.array([0,20,40,60,80])
@@ -90,8 +91,7 @@ z = np.polyfit(x, y, 3)
 mp0 = np.poly1d(z)
 
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-app = dash.Dash(__name__, external_stylesheets=[external_stylesheets,dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 
 app.layout = dbc.Container([
@@ -196,14 +196,16 @@ app.layout = dbc.Container([
             dcc.Graph(
                 id='categories-graph',
                 figure={
-                    'data':[
-                        {
-                            'type':'pie',
-                            'labels':df['Categorie']
-                        }
-                    ],
+                    'data':[{
+                        'type':'pie',
+                        'labels':dfc.index,
+                        'values':dfc["Duration"]['count'],
+                        'hovertemplate':'Categorie: %{label} km<br>Activités: %{value}<br>%{percent}',
+                        'name':""
+                    }],
                     'layout': {
-                        'title':'Categories'
+                        'title':'Categories',
+                        'margin':{'r':0,'t':50,'b':50}
                     }
                 }
             ),
@@ -358,7 +360,7 @@ def displayModal(n_open,n_close,is_open,dff,rows):
             maxLon = track.get_bounds().max_longitude 
             
         for seg in track.segments:
-            d = {'type':'scattermapbox','mode':'markers+lines','name':date}
+            d = {'type':'scattermapbox','mode':'lines','name':date}
             d['lon'] = list(map(lambda trkpt: trkpt.longitude, seg.points))
             d['lat'] = list(map(lambda trkpt: trkpt.latitude, seg.points))
             datamap.append(d)
