@@ -12,6 +12,7 @@ import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 import numpy as np
 import scipy as sp
+import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -57,6 +58,7 @@ dfy = df.groupby(df.Date.dt.to_period("Y")).agg([('mean',lambda x: x.mean(numeri
 dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)), 
                                     ('sum', lambda x: x.sum(numeric_only=False)),
                                     ('count', 'count')])
+dfg = {}
 
 #### create some dictionaries
 period = {
@@ -442,25 +444,44 @@ def zoomCenter(bounds):
     zoomy = math.log2(mp0(minLat+(maxLat-minLat)/2)*npy/dy)
     return (min(zoomx,zoomy),{'lat':minLat+(maxLat-minLat)/2,'lon':minLon+(maxLon-minLon)/2})
 
+
 modal = dbc.Modal(
     [
         dbc.ModalHeader("Header",id="modal-header"),
-        dbc.ModalBody("Body",id="modal-body"),
+        dbc.ModalBody(
+            [
+                html.Div(id='modal-info'),
+                html.Div(
+                    [
+                        dcc.Graph(id='map',clear_on_unhover=True),
+                        dcc.Graph(id='speed-graph',clear_on_unhover=True,selectedData=None),
+                        dcc.Graph(id='ele-graph',clear_on_unhover=True,selectedData=None),
+                        html.Div(id='modal-created',style={'display':'none'}),
+                        html.Div(id='test')
+                    ],
+                    id='modal-graphs',
+                    style={'display':'none'}
+                )
+            ],
+            id="modal-body"),
         dbc.ModalFooter(
             dbc.Button("Close", id="close", className="ml-auto")
-        ),
+        )
     ],
     id="modal",
-    # scrollable=True,
     backdrop='static',
     size="xl"
 )
 
-#### display the modal
 @app.callback(
     [dash.dependencies.Output('modal','is_open'),
      dash.dependencies.Output('modal-header','children'),
-     dash.dependencies.Output('modal-body','children')],
+     dash.dependencies.Output('modal-info','style'),
+     dash.dependencies.Output('modal-info','children'),
+     dash.dependencies.Output('modal-graphs','style'),
+     dash.dependencies.Output('speed-graph','selectedData'),
+     dash.dependencies.Output('ele-graph','selectedData')
+    ],
     [dash.dependencies.Input('info-bt','n_clicks'),
      dash.dependencies.Input('close','n_clicks')],
     [dash.dependencies.State('modal','is_open'),
@@ -468,27 +489,23 @@ modal = dbc.Modal(
      dash.dependencies.State('table','selected_rows')]
 )
 def displayModal(n_open,n_close,is_open,dff,rows):
-    if is_open or not n_open:
-        return [False,"",""]
-    if n_open and not rows:
-        return [True,"Attention","Veuillez selectionner au moins une course pour afficher plus d'informations."]
+    if not n_open or is_open:
+        return [False,"",None,"",{'display':'none'},None,None]
+    if not rows:
+        return [True,"Attention",{'display':'block'},"Veuillez selectionner au moins une course pour afficher plus d'informations.",{'display':'none'},None,None]
 
-    children = []
+    info = []
     dates = []
     gpxfiles = []
-    datamap = []
-    dataspeed = []
-    dataele = []
-
     # filter rows without gpx file
     for i in rows:
         if not dff[i]['GPX File']:
-            children.append(html.Div("Pas de données pour la course du "+dff[i]['Date_str']))
+            info.append(html.Div("Pas de données pour la course du "+dff[i]['Date_str']))
         else:
             gpxfiles.append(dff[i]['GPX File'])
         dates.append(dff[i]['Date_str'])
     if not gpxfiles:
-        return [True,"Attention", children]
+        return [True,"Attention", {'display':'block'}, info, {'display':'none'},None,None]
 
     if len(dates) == 1:
         title = "Course du " + dates[0]
@@ -498,13 +515,13 @@ def displayModal(n_open,n_close,is_open,dff,rows):
             title =  title + ', ' + dates[i]
         title = title + ' et du ' + dates[-1]
 
-    bounds = []
+    dfg.clear()
     for f in gpxfiles:
         date = os.path.splitext(os.path.basename(f))[0]
         gpx_file = open('runkeeper-data/'+f,'r')
         gpx = gpxpy.parse(gpx_file)
         track = gpx.tracks[0]
-        bounds.append(track.get_bounds())
+        dfg[date] = {'bounds':track.get_bounds(),'dff':[]}
 
         dist = 0
         for seg in track.segments:
@@ -518,103 +535,220 @@ def displayModal(n_open,n_close,is_open,dff,rows):
             dist = dpt[-1]
             d['distance'] = pd.Series(dpt)/1000.
             dff = pd.DataFrame(d)
+            dfg[date]["dff"].append(dff)
 
-            dmap = {'type':'scattermapbox','mode':'markers+lines','name':date,
-                       'marker':{'opacity':0},'selected':{'marker':{'opacity':1}}}
+    return [True,title,{'display':'block' if info else 'none'},info or '',{'display':'block'},None,None]
+
+@app.callback(
+    dash.dependencies.Output('map','figure'),
+    [dash.dependencies.Input('modal-graphs','style'),
+     dash.dependencies.Input('speed-graph','hoverData'),
+     dash.dependencies.Input('ele-graph','hoverData'),
+     dash.dependencies.Input('speed-graph','selectedData'),
+     dash.dependencies.Input('ele-graph','selectedData')],
+    [dash.dependencies.State('map','figure')]
+)
+def createMap(style, hoverDataSpeed, hoverDataEle, selectedDataSpeed, selectedDataEle, figure):
+    ctx = dash.callback_context
+    if not ctx.triggered or style['display'] == 'none':
+        return {}
+
+    inputTrig = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    colors = px.colors.qualitative.D3
+
+    if not inputTrig == 'modal-graphs' and (hoverDataSpeed or hoverDataEle or selectedDataSpeed or selectedDataEle) and figure:
+        figure['data'] = [dd for dd in figure['data'] if dd['name'] != 'position']
+        figure['data'] = [dd for dd in figure['data'] if dd['name'] != 'selection']
+
+        hoverData = hoverDataSpeed or hoverDataEle
+        if hoverData:
+            lon = hoverData['points'][0]['customdata'][0]
+            lat = hoverData['points'][0]['customdata'][1]
+            d = {'type':'scattermapbox','mode':'markers','lon':[lon],'lat':[lat],'marker':{'size':15,'color':'blue'},'name':'position','showlegend':False}
+            figure['data'].append(d)
+
+        if selectedDataSpeed or selectedDataEle:
+            for dd in figure['data']:
+                if dd['name'] != 'position':
+                    dd.update({'opacity':0.3})
+            if selectedDataSpeed:
+                selectedData = selectedDataSpeed['points']
+                curves = set()
+                for pt in selectedData:
+                    curves.add(pt['curveNumber'])
+                    for c in curves:
+                        lon = list(map(lambda pt: pt['customdata'][0], [pt for pt in selectedData if pt['curveNumber'] == c]))
+                        lat = list(map(lambda pt: pt['customdata'][1], [pt for pt in selectedData if pt['curveNumber'] == c]))
+                        d = {'type':'scattermapbox','mode':'lines','lon':lon,'lat':lat,'line':{'width':7,'color':colors[c%len(colors)]},'name':'selection','showlegend':False}
+                        figure['data'].append(d)
+            if selectedDataEle:
+                selectedData = selectedDataEle['points']
+                curves = set()
+                for pt in selectedData:
+                    curves.add(pt['curveNumber'])
+                    for c in curves:
+                        lon = list(map(lambda pt: pt['customdata'][0], [pt for pt in selectedData if pt['curveNumber'] == c]))
+                        lat = list(map(lambda pt: pt['customdata'][1], [pt for pt in selectedData if pt['curveNumber'] == c]))
+                        d = {'type':'scattermapbox','mode':'lines','lon':lon,'lat':lat,'line':{'width':7,'color':colors[c%len(colors)]},'name':'selection','showlegend':False}
+                        figure['data'].append(d)
+        else:
+            for dd in figure['data']:
+                dd.update({'opacity':1})
+
+        return figure
+
+    datamap = []
+    bounds = []
+    i = 0
+    for date,d in dfg.items():
+        bounds.append(d['bounds'])
+
+        for dff in d['dff']:
+            dmap = {'type':'scattermapbox','mode':'markers+lines','name':date,'line':{'color':colors[i%len(colors)]},
+                    'marker':{'opacity':0,'color':colors[i%len(colors)]},'selected':{'marker':{'opacity':1,'color':colors[i%len(colors)]}},
+                    'hovertemplate':'Distance: %{customdata[0]:.2f} km<br>Vitesse: %{customdata[1]:.2f} km/h<br>Elevation: %{customdata[2]} m'}
             dmap['lat'] = dff['lat']
             dmap['lon'] = dff['lon']
+            dmap['customdata'] = dff[['distance','speed','ele']].to_numpy()
             datamap.append(dmap)
-            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[0].longitude],'lat':[seg.points[0].latitude],'marker':{'size':8,'color':'green'},'name':'start','showlegend':False})
-            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[-1].longitude],'lat':[seg.points[-1].latitude],'marker':{'size':8,'color':'red'},'name':'finish','showlegend':False})
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[dff['lon'].iloc[0]],'lat':[dff['lat'].iloc[0]],'marker':{'size':8,'color':'green'},'name':date,'showlegend':False,'hovertemplate':'Depart'})
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[dff['lon'].iloc[-1]],'lat':[dff['lat'].iloc[-1]],'marker':{'size':8,'color':'red'},'name':date,'showlegend':False,'hovertemplate':'Arrive'})
+            i += 1
 
-            dspeed = { 'type':'scatter','name':date,'mode':'markers+lines',
+    zoom,center = zoomCenter(bounds)
+    layoutmap = {
+        'mapbox': {
+            'style':'basic',
+            'accesstoken':token,
+            'center': {
+                'lat':center['lat'],
+                'lon':center['lon']
+            },
+            'zoom':zoom
+        },
+        'height':350,
+        'margin': {
+            't':30,
+            'b':0
+        },
+        'showlegend':len(datamap)/3>1,
+        "uirevision":1
+    }
+    
+    return {'data':datamap,'layout':layoutmap}
+
+@app.callback(
+    dash.dependencies.Output('speed-graph','figure'),
+    [dash.dependencies.Input('modal-graphs','style'),
+     dash.dependencies.Input('map','hoverData')],
+    [dash.dependencies.State('speed-graph','figure')]
+)
+def createSpeed(style,hoverData,figure):
+    if style['display'] == 'none':
+        return {}
+
+    window = 10
+
+    if figure:
+        figure['data'] = [dd for dd in figure['data'] if dd['name'] != 'position']
+        if hoverData:
+            curve = hoverData['points'][0]['curveNumber']
+            if curve % 3 == 0:
+                i = window if hoverData['points'][0]['pointIndex'] < window else hoverData['points'][0]['pointIndex']
+                y = figure['data'][curve//3]['y'][i]
+                figure['data'].append({'type':'scatter','mode':'markers','name':'position','showlegend':False,
+                                       'marker':{'size':15,'color':'blue'},
+                                       'x':[hoverData['points'][0]['customdata'][0]],'y':[y]})
+            return figure
+
+    dataspeed = []
+    for date,d in dfg.items():
+        for dff in d['dff']:
+            dspeed = { 'type':'scatter','name':date,'mode':'markers+lines','line':{'shape':'spline','smoothing':1.3},
                        'marker':{'opacity':0},'selected':{'marker':{'opacity':1}},
                        'hovertemplate':'Distance: %{x:.2f} km<br>Vitesse: %{y:.2f} km/h'}
             dspeed['x'] = dff['distance']
-            dspeed['y'] = dff['speed'].rolling(window=3,center=True).mean()
+            dspeed['y'] = dff['speed'].rolling(window=window,center=False).mean()
+            dspeed['customdata'] = dff[['lon','lat']].to_numpy()
             dataspeed.append(dspeed)
+    
+    layoutspeed = {
+        'height':300,
+        'margin': {
+            't':30,
+            'b':30
+        },
+        'yaxis': {
+            'title':'vitesse'
+        },
+        'xaxis': {
+            'title':'distance',
+            'ticksuffix':'km'
+        },
+        'hovermode':'closest',
+        'hoverdistance':50,
+        'dragmode':'select',
+        'selectdirection':'h',
+        'showlegend':len(dataspeed)>1,
+        "uirevision":1
+    }
 
+    return {'data':dataspeed,'layout':layoutspeed}
+
+@app.callback(
+    dash.dependencies.Output('ele-graph','figure'),
+    [dash.dependencies.Input('modal-graphs','style'),
+     dash.dependencies.Input('map','hoverData')],
+    [dash.dependencies.State('ele-graph','figure')]
+)
+def createEle(style,hoverData,figure):
+    if style['display'] == 'none':
+        return {}
+
+    if figure:
+        figure['data'] = [dd for dd in figure['data'] if dd['name'] != 'position']
+        if hoverData:
+            curve = hoverData['points'][0]['curveNumber']
+            if curve % 3 == 0:
+                figure['data'].append({'type':'scatter','mode':'markers','name':'position','showlegend':False,
+                                       'marker':{'size':15,'color':'blue'},
+                                       'x':[hoverData['points'][0]['customdata'][0]],
+                                       'y':[hoverData['points'][0]['customdata'][2]]})
+            return figure
+
+    dataele = []
+    for date,d in dfg.items():
+        for dff in d['dff']:
             dele = { 'type':'scatter','name':date,'mode':'markers+lines',
-                     'marker':{'opacity':0},'selected':{'marker':{'opacity':1}},
-                     'hovertemplate':'Distance: %{x:.2f} km<br>Elevation: %{y:.2f} m'}
+                       'marker':{'opacity':0},'selected':{'marker':{'opacity':1}},
+                       'hovertemplate':'Distance: %{x:.2f} km<br>Vitesse: %{y:.2f} km/h'}
             dele['x'] = dff['distance']
             dele['y'] = dff['ele']
+            dele['customdata'] = dff[['lon','lat']].to_numpy()
             dataele.append(dele)
+    
+    layoutele = {
+        'height':300,
+        'margin': {
+            't':30,
+            'b':30
+        },
+        'yaxis': {
+            'title':'elevation'
+        },
+        'xaxis': {
+            'title':'distance',
+            'ticksuffix':'km'
+        },
+        'hovermode':'closest',
+        'hoverdistance':50,
+        'dragmode':'select',
+        'selectdirection':'h',
+        "uirevision":1
+    }
 
-    zoom,center = zoomCenter(bounds)
-    
-    graphMap = dcc.Graph(
-        id='map',
-        figure={
-            'data': datamap,
-            'layout': {
-                'mapbox': {
-                    'style':'basic',
-                    'accesstoken':token,
-                    'center': {
-                        'lat':center['lat'],
-                        'lon':center['lon']
-                    },
-                    'zoom':zoom
-                },
-                'height':350,
-                'margin': {
-                    't':30,
-                    'b':0
-                },
-                'showlegend':len(dataspeed)>1
-            }
-        }
-    )
-    children.append(graphMap)
-
-    graphSpeed = dcc.Graph(
-        id='speed-graph',
-        figure={
-            'data': dataspeed,
-            'layout': {
-                'height':350,
-                'margin': {
-                    't':30,
-                    'b':30
-                },
-                'yaxis': {
-                    'title':'vitesse'
-                },
-                'xaxis': {
-                    'title':'distance'
-                },
-                'hovermode':'closest',
-                'dragmode':'select'
-            }
-        }
-    )
-    children.append(graphSpeed)
-    
-    graphEle = dcc.Graph(
-        id='ele-graph',
-        figure={
-            'data': dataele,
-            'layout': {
-                'height':350,
-                'margin': {
-                    't':30,
-                    'b':30
-                },
-                'yaxis': {
-                    'title':'elevation'
-                },
-                'xaxis': {
-                    'title':'distance'
-                },
-                'hovermode':'closest',
-                'dragmode':'select'
-            }
-        }
-    )
-    children.append(graphEle)
-    
-    return [True, title, children]
+    return {'data':dataele,'layout':layoutele}
 
 
 ### app layout and title
@@ -624,7 +758,8 @@ app.layout = dbc.Container([
     catRow,
     filterRow,
     dataTable,
-    modal
+    modal,
+    dcc.Store(id='memory')
 ])
 app.title = 'Runkeeper-data'
 
