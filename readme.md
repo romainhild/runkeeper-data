@@ -16,3 +16,7 @@ And launch the app with
     python app.py
 
 which should give an address to visit with your browser where you have the different graphs and table.
+
+![Rythme](rythme.png)
+
+![Table](table.png)
