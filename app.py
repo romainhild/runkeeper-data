@@ -23,6 +23,12 @@ import locale
 locale.setlocale(locale.LC_ALL, 'fr_FR')
 config_plot={'locale':'fr'}
 
+
+#### start of the Dash app
+external_scripts = ['https://cdn.plot.ly/plotly-locale-fr-latest.js']
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP],external_scripts=external_scripts)
+
+
 #### prepare database
 df = pd.read_csv("runkeeper-data/cardioActivities.csv")
 df["Rank"] = range(1, len(df)+1)
@@ -76,237 +82,76 @@ tables = {
     'Distance (km)': {'sort':'Distance (km)','name':'Distance','suffix':' km'},
     'Duration_str': {'sort':'Duration','name':'Durée','suffix':''}
 }
-columnsTable = set()
-for k,v in tables.items():
-    columnsTable.add(k)
-    columnsTable.add(v['sort'])
-pageSize = 100
 
 
-#### prepare a figure for the categories
-fig = make_subplots(rows=2, cols=2, subplot_titles=("Distance", "Rythme", "Durée", "Activités"))
-fig.add_bar(x=dfc.index,y=dfc["Distance (km)"]["sum"],row=1,col=1,name="",hovertemplate='Categorie: %{x} km<br>Distance totale: %{y} km')
-fig.add_bar(x=dfc.index,y=dfc["Average Pace"]["mean"]+ pd.to_datetime('1970/01/01'),row=1,col=2,name='',hovertemplate='Categorie: %{x} km<br>Rythme: %{y} min/km')
-fig.add_bar(x=dfc.index,y=dfc["Duration"]["sum"].dt.total_seconds()/3600,row=2,col=1,name="",hovertemplate='Categorie: %{x} km<br>Durée totale: %{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s',customdata=dfc["Duration"]["sum"].dt.components)
-fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="",hovertemplate='Categorie: %{x} km<br>Activités: %{y}')
-fig.update_yaxes(title="km",row=1,col=1)
-fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
-fig.update_yaxes(title="heure",ticksuffix="h",row=2,col=1)
-fig.update_layout(showlegend=False,margin={'t':50,'r':0,'l':0,'b':50})
+#### title
+title = dbc.Container([
+    html.H1(children='Runkeeper Data'),
+    html.H2(children='Statistiques provenant de Runkeeper')
+])
 
-#### fonction for the zoom
-# meter per pixel at zoom level 0 by latitude
-x = np.array([0,20,40,60,80])
-y = np.array([78271,73551,59959,39135,13591])
-z = np.polyfit(x, y, 3)
-mp0 = np.poly1d(z)
-def zoomCenter(bounds):
-    minLat = min(list(map(lambda b: b.min_latitude, bounds)))
-    maxLat = max(list(map(lambda b: b.max_latitude, bounds)))
-    minLon = min(list(map(lambda b: b.min_longitude, bounds)))
-    maxLon = max(list(map(lambda b: b.max_longitude, bounds)))
-            
-    dx = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(maxLat,minLon))
-    dy = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(minLat,maxLon))
-    # number of pixel on the graph on MY screen !!
-    npx = 800
-    npy = 300
-    # we fit mp0(lat)/(2**z) meter/pixel at zoom level z and latitude lat
-    zoomx = math.log2(mp0(minLat+(maxLat-minLat)/2)*npx/dx)
-    zoomy = math.log2(mp0(minLat+(maxLat-minLat)/2)*npy/dy)
-    return (min(zoomx,zoomy),{'lat':minLat+(maxLat-minLat)/2,'lon':minLon+(maxLon-minLon)/2})
-
-#### start of the Dash app
-external_scripts = ['https://cdn.plot.ly/plotly-locale-fr-latest.js']
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP],external_scripts=external_scripts)
-
-
-app.layout = dbc.Container([
-    #### title
-    dbc.Container([
-        html.H1(children='Runkeeper Data'),
-        html.H2(children='Statistiques provenant de Runkeeper')
-    ]),
-
-    #### activities controls and graph
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                dbc.Form([
-                                    dbc.FormGroup([
-                                        dbc.Label("Statistiques", html_for="stat-rd"),
-                                        dbc.RadioItems(
-                                            id='stat-rd',
-                                            options=[ { 'label':v['label'], 'value':k } for k,v in statistiques.items() ],
-                                            value='S',
-                                            labelStyle={'display': 'block'}
-                                        )
-                                    ])
-                                ]),
-                                width=6
-                            ), # col form stat
-                            dbc.Col(
-                                dbc.Form([
-                                    dbc.FormGroup([
-                                        dbc.Label("Par", html_for="time-rd"),
-                                        dbc.RadioItems(
-                                            id='time-rd',
-                                            options=[{'label':period[p]['label'], 'value':p} for p in period],
-                                            value='A'
-                                        )
-                                    ])       
-                                ]),
-                                width=6
-                            )
-                        ],
-                        form=True
-                    ),
-                    dbc.Row([
-                        dbc.Col(
-                            dbc.Form([
-                                dbc.FormGroup([
-                                    dbc.Label("Moyenne:", html_for="mean-ck"),
-                                    dbc.Checklist(
-                                        id='mean-ck',
-                                        options=[{'label':'Moyenne sur:','value':'mean'}],
-                                        value=[]
-                                    )]
-                                ),
-                                dbc.FormGroup([
-                                    dbc.Label("Fenêtre:", html_for="mean-sl"),
-                                    dcc.Slider(
-                                        id='mean-sl',
-                                        min=1,
-                                        max=15,
-                                        marks={i:str(i) for i in range(1,16)},
-                                        value=3,
-                                    disabled=True
-                                    )
-                                ])
-                            ]),
-                            width=12
-                        )
-                    ])
-                ],
-                width=4
-            ),
-            dbc.Col(dcc.Graph(id='example-graph',config=config_plot),width=8)
-        ],
-        align='center'
-    ),
-
-    #### categories graph
-    dbc.Row([
-        dbc.Col(
-            dcc.Graph(
-                id='categories-graph',
-                figure={
-                    'data':[{
-                        'type':'pie',
-                        'labels':dfc.index,
-                        'values':dfc["Duration"]['count'],
-                        'hovertemplate':'Categorie: %{label} km<br>Activités: %{value}<br>%{percent}',
-                        'name':""
-                    }],
-                    'layout': {
-                        'title':'Categories',
-                        'margin':{'r':0,'t':50,'b':50}
-                    }
-                }
-            ),
-            width=6
-        ),
-        dbc.Col(
-            dcc.Graph(
-                id='bycategories-graph',
-                figure=fig
-            ),
-            width=6
-        )
-    ]),
-
-    #### filter and info for table
-    dbc.Row(
-        [
-            dbc.Col(
-                dbc.FormGroup([
-                    dbc.Label("Catégorie:", html_for="cat-dd"),
-                    dcc.Dropdown(
-                        id='cat-dd',
-                        options=[{'label':'Toutes','value':-1}]+[
-                            {'label':str(c*catSize)+'-'+str((c+1)*catSize)+' km','value':c}
-                            for c in np.sort(df['Categorie_sort'].unique())
-                        ],
-                        value=-1,
-                        searchable=False,
-                        clearable=False
-                    )
-                ]),
-                width=3
-            ),
-            dbc.Col(
-                dbc.FormGroup([
-                    dbc.Label("Filtre:", html_for="filter-in"),
-                    dbc.Input(id='filter-in')
-                ]),
-                width=6
-            ),
-            dbc.Col(
-                html.Div(
-                    dbc.FormGroup([
-                        dbc.Button("Plus d'infos", id='info-bt'),
-                    ]),
-                    className='text-center'
-                ),
-                width=2
-            ),
-            dbc.Col(
-                html.Div(
-                    dbc.FormGroup([
-                        dbc.Button("Reset", id='clear-bt')
-                    ]),
-                    className='text-center'
-                ),
-                width=1
+#### activities controls and graph
+activityCol = dbc.Col(
+    dbc.Form([
+        dbc.FormGroup([
+            dbc.Label("Statistiques", html_for="stat-rd"),
+            dbc.RadioItems(
+                id='stat-rd',
+                options=[ { 'label':v['label'], 'value':k } for k,v in statistiques.items() ],
+                value='S',
+                labelStyle={'display': 'block'}
             )
-        ],
-        form=True,
-        align="end"
-    ),
-
-    #### datatable
-    dash_table.DataTable(
-        id='table',
-        columns=[{ 'name':v['name'], 'id':k} for k,v in tables.items()],
-        data=df.to_dict('records'),
-        row_selectable='multi',
-        page_current=0,
-        page_size=pageSize,
-        page_action='custom',
-        sort_action='custom',
-        sort_mode='single',
-        sort_by=[]
-    ),
-
-    #### modal for gpx info
-    dbc.Modal(
-        [
-            dbc.ModalHeader("Header",id="modal-header"),
-            dbc.ModalBody("Body",id="modal-body"),
-            dbc.ModalFooter(
-                dbc.Button("Close", id="close", className="ml-auto")
+        ])
+    ]),
+    width=6
+)
+periodCol = dbc.Col(
+    dbc.Form([
+        dbc.FormGroup([
+            dbc.Label("Par", html_for="time-rd"),
+            dbc.RadioItems(
+            id='time-rd',
+                options=[{'label':period[p]['label'], 'value':p} for p in period],
+                value='A'
+            )
+        ])       
+    ]),
+    width=6
+)
+statRow = dbc.Row([activityCol, periodCol], form=True )
+meanRow = dbc.Row([
+    dbc.Col(
+        dbc.Form([
+            dbc.FormGroup([
+                dbc.Label("Moyenne:", html_for="mean-ck"),
+                dbc.Checklist(
+                id='mean-ck',
+                    options=[{'label':'Moyenne sur:','value':'mean'}],
+                    value=[]
+                )]
             ),
-        ],
-        id="modal",
-        # scrollable=True,
-        backdrop='static',
-        size="xl"
+            dbc.FormGroup([
+                dbc.Label("Fenêtre:", html_for="mean-sl"),
+                dcc.Slider(
+                    id='mean-sl',
+                    min=1,
+                    max=15,
+                    marks={i:str(i) for i in range(1,16)},
+                    value=3,
+                    disabled=True
+                )
+            ])
+        ]),
+        width=12
     )
 ])
+statRow = dbc.Row(
+    [
+        dbc.Col([statRow, meanRow], width=4 ),
+        dbc.Col(dcc.Graph(id='example-graph',config=config_plot),width=8)
+    ],
+    align='center'
+)
 
 #### disable activity radio button when mean or activity stat
 @app.callback(
@@ -420,6 +265,116 @@ def update_graph(time,window,nomean,stat):
         'layout': layout
     }
 
+
+#### categories graph
+fig = make_subplots(rows=2, cols=2, subplot_titles=("Distance", "Rythme", "Durée", "Activités"))
+fig.add_bar(x=dfc.index,y=dfc["Distance (km)"]["sum"],row=1,col=1,name="",hovertemplate='Categorie: %{x} km<br>Distance totale: %{y} km')
+fig.add_bar(x=dfc.index,y=dfc["Average Pace"]["mean"]+ pd.to_datetime('1970/01/01'),row=1,col=2,name='',hovertemplate='Categorie: %{x} km<br>Rythme: %{y} min/km')
+fig.add_bar(x=dfc.index,y=dfc["Duration"]["sum"].dt.total_seconds()/3600,row=2,col=1,name="",hovertemplate='Categorie: %{x} km<br>Durée totale: %{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s',customdata=dfc["Duration"]["sum"].dt.components)
+fig.add_bar(x=dfc.index,y=dfc["Duration"]['count'],row=2,col=2,name="",hovertemplate='Categorie: %{x} km<br>Activités: %{y}')
+fig.update_yaxes(title="km",row=1,col=1)
+fig.update_yaxes(title="min/km", tickformat="%M:%S",row=1,col=2)
+fig.update_yaxes(title="heure",ticksuffix="h",row=2,col=1)
+fig.update_layout(showlegend=False,margin={'t':50,'r':0,'l':0,'b':50})
+
+catRow = dbc.Row([
+    dbc.Col(
+        dcc.Graph(
+            id='categories-graph',
+            figure={
+                'data':[{
+                    'type':'pie',
+                    'labels':dfc.index,
+                    'values':dfc["Duration"]['count'],
+                    'hovertemplate':'Categorie: %{label} km<br>Activités: %{value}<br>%{percent}',
+                    'name':""
+                }],
+                'layout': {
+                    'title':'Categories',
+                    'margin':{'r':0,'t':50,'b':50}
+                }
+            }
+        ),
+        width=6
+    ),
+    dbc.Col(
+        dcc.Graph(
+            id='bycategories-graph',
+            figure=fig
+        ),
+        width=6
+    )
+])
+
+#### filter and info for table
+columnsTable = set()
+for k,v in tables.items():
+    columnsTable.add(k)
+    columnsTable.add(v['sort'])
+pageSize = 100
+
+filterRow = dbc.Row(
+    [
+        dbc.Col(
+            dbc.FormGroup([
+                dbc.Label("Catégorie:", html_for="cat-dd"),
+                dcc.Dropdown(
+                    id='cat-dd',
+                    options=[{'label':'Toutes','value':-1}]+[
+                        {'label':str(c*catSize)+'-'+str((c+1)*catSize)+' km','value':c}
+                        for c in np.sort(df['Categorie_sort'].unique())
+                    ],
+                    value=-1,
+                    searchable=False,
+                    clearable=False
+                )
+            ]),
+            width=3
+        ),
+        dbc.Col(
+            dbc.FormGroup([
+                dbc.Label("Filtre:", html_for="filter-in"),
+                dbc.Input(id='filter-in')
+            ]),
+            width=6
+        ),
+        dbc.Col(
+            html.Div(
+                dbc.FormGroup([
+                    dbc.Button("Plus d'infos", id='info-bt'),
+                ]),
+                className='text-center'
+            ),
+            width=2
+        ),
+        dbc.Col(
+            html.Div(
+                dbc.FormGroup([
+                    dbc.Button("Reset", id='clear-bt')
+                ]),
+                className='text-center'
+            ),
+            width=1
+        )
+    ],
+    form=True,
+    align="end"
+)
+
+#### datatable
+dataTable = dash_table.DataTable(
+    id='table',
+    columns=[{ 'name':v['name'], 'id':k} for k,v in tables.items()],
+    data=df.to_dict('records'),
+    row_selectable='multi',
+    page_current=0,
+    page_size=pageSize,
+    page_action='custom',
+    sort_action='custom',
+    sort_mode='single',
+    sort_by=[]
+)
+
 #### clear selection in the table
 @app.callback(
     dash.dependencies.Output('table','selected_rows'),
@@ -463,6 +418,43 @@ def update_table(page_current, page_size, sort_by, filter_by, by_cat):
     return [dff.iloc[
         page_current*page_size:(page_current+ 1)*page_size
     ].to_dict('records'),1]
+
+
+#### modal for gpx info
+# meter per pixel at zoom level 0 by latitude
+x = np.array([0,20,40,60,80])
+y = np.array([78271,73551,59959,39135,13591])
+z = np.polyfit(x, y, 3)
+mp0 = np.poly1d(z)
+def zoomCenter(bounds):
+    minLat = min(list(map(lambda b: b.min_latitude, bounds)))
+    maxLat = max(list(map(lambda b: b.max_latitude, bounds)))
+    minLon = min(list(map(lambda b: b.min_longitude, bounds)))
+    maxLon = max(list(map(lambda b: b.max_longitude, bounds)))
+            
+    dx = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(maxLat,minLon))
+    dy = gpxpy.gpx.GPXTrackPoint(maxLat,maxLon).distance_2d(gpxpy.gpx.GPXTrackPoint(minLat,maxLon))
+    # number of pixel on the graph on MY screen !!
+    npx = 800
+    npy = 300
+    # we fit mp0(lat)/(2**z) meter/pixel at zoom level z and latitude lat
+    zoomx = math.log2(mp0(minLat+(maxLat-minLat)/2)*npx/dx)
+    zoomy = math.log2(mp0(minLat+(maxLat-minLat)/2)*npy/dy)
+    return (min(zoomx,zoomy),{'lat':minLat+(maxLat-minLat)/2,'lon':minLon+(maxLon-minLon)/2})
+
+modal = dbc.Modal(
+    [
+        dbc.ModalHeader("Header",id="modal-header"),
+        dbc.ModalBody("Body",id="modal-body"),
+        dbc.ModalFooter(
+            dbc.Button("Close", id="close", className="ml-auto")
+        ),
+    ],
+    id="modal",
+    # scrollable=True,
+    backdrop='static',
+    size="xl"
+)
 
 #### display the modal
 @app.callback(
@@ -623,6 +615,18 @@ def displayModal(n_open,n_close,is_open,dff,rows):
     children.append(graphEle)
     
     return [True, title, children]
+
+
+### app layout and title
+app.layout = dbc.Container([
+    title,
+    statRow,
+    catRow,
+    filterRow,
+    dataTable,
+    modal
+])
+app.title = 'Runkeeper-data'
 
 
 if __name__ == '__main__':
