@@ -53,7 +53,6 @@ dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)
                                     ('count', 'count')])
 
 #### create some dictionaries
-dff = { 'A':df, 'S':dfw, 'M':dfm, 'Y':dfy }
 period = {
     'A': { 'data':df, 'label':'Activité', 'text':'Activité du %d/%m/%Y'},
     'S': { 'data':dfw, 'label':'Semaine', 'text':'Semaine du %d/%m/%Y'},
@@ -303,7 +302,7 @@ app.layout = dbc.Container([
             ),
         ],
         id="modal",
-        scrollable=True,
+        # scrollable=True,
         backdrop='static',
         size="xl"
     )
@@ -486,6 +485,8 @@ def displayModal(n_open,n_close,is_open,dff,rows):
     dates = []
     gpxfiles = []
     datamap = []
+    dataspeed = []
+    dataele = []
 
     # filter rows without gpx file
     for i in rows:
@@ -512,18 +513,45 @@ def displayModal(n_open,n_close,is_open,dff,rows):
         gpx = gpxpy.parse(gpx_file)
         track = gpx.tracks[0]
         bounds.append(track.get_bounds())
-            
+
+        dist = 0
         for seg in track.segments:
-            d = {'type':'scattermapbox','mode':'lines','name':date}
-            d['lon'] = list(map(lambda trkpt: trkpt.longitude, seg.points))
-            d['lat'] = list(map(lambda trkpt: trkpt.latitude, seg.points))
-            datamap.append(d)
-            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[0].longitude],'lat':[seg.points[0].latitude],'marker':{'size':8,'color':'green'},'name':'start'})
-            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[-1].longitude],'lat':[seg.points[-1].latitude],'marker':{'size':8,'color':'red'},'name':'finish'})
+            d = {}
+            d['lon'] = pd.Series(list(map(lambda trkpt: trkpt.longitude, seg.points)))
+            d['lat'] = pd.Series(list(map(lambda trkpt: trkpt.latitude, seg.points)))
+            d['ele'] = pd.Series(list(map(lambda trkpt: trkpt.elevation, seg.points)))
+            d['time'] = pd.to_datetime(pd.Series(list(map(lambda trkpt: trkpt.time, seg.points))))
+            d['speed'] = pd.Series([0]+list(map(lambda p: (p[0].speed_between(p[1]) or 0)*3.6, list(zip(seg.points,seg.points[1:])))))
+            dpt = np.cumsum([dist]+list(map(lambda p: p[0].distance_3d(p[1]), list(zip(seg.points,seg.points[1:])))))
+            dist = dpt[-1]
+            d['distance'] = pd.Series(dpt)/1000.
+            dff = pd.DataFrame(d)
+
+            dmap = {'type':'scattermapbox','mode':'markers+lines','name':date,
+                       'marker':{'opacity':0},'selected':{'marker':{'opacity':1}}}
+            dmap['lat'] = dff['lat']
+            dmap['lon'] = dff['lon']
+            datamap.append(dmap)
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[0].longitude],'lat':[seg.points[0].latitude],'marker':{'size':8,'color':'green'},'name':'start','showlegend':False})
+            datamap.append({'type':'scattermapbox','mode':'markers','lon':[seg.points[-1].longitude],'lat':[seg.points[-1].latitude],'marker':{'size':8,'color':'red'},'name':'finish','showlegend':False})
+
+            dspeed = { 'type':'scatter','name':date,'mode':'markers+lines',
+                       'marker':{'opacity':0},'selected':{'marker':{'opacity':1}},
+                       'hovertemplate':'Distance: %{x:.2f} km<br>Vitesse: %{y:.2f} km/h'}
+            dspeed['x'] = dff['distance']
+            dspeed['y'] = dff['speed'].rolling(window=3,center=True).mean()
+            dataspeed.append(dspeed)
+
+            dele = { 'type':'scatter','name':date,'mode':'markers+lines',
+                     'marker':{'opacity':0},'selected':{'marker':{'opacity':1}},
+                     'hovertemplate':'Distance: %{x:.2f} km<br>Elevation: %{y:.2f} m'}
+            dele['x'] = dff['distance']
+            dele['y'] = dff['ele']
+            dataele.append(dele)
 
     zoom,center = zoomCenter(bounds)
     
-    graph = dcc.Graph(
+    graphMap = dcc.Graph(
         id='map',
         figure={
             'data': datamap,
@@ -537,14 +565,63 @@ def displayModal(n_open,n_close,is_open,dff,rows):
                     },
                     'zoom':zoom
                 },
+                'height':350,
                 'margin': {
-                    't':50
+                    't':30,
+                    'b':0
                 },
-                'showlegend':len(datamap)>1
+                'showlegend':len(dataspeed)>1
             }
         }
     )
-    children.append(graph)
+    children.append(graphMap)
+
+    graphSpeed = dcc.Graph(
+        id='speed-graph',
+        figure={
+            'data': dataspeed,
+            'layout': {
+                'height':350,
+                'margin': {
+                    't':30,
+                    'b':30
+                },
+                'yaxis': {
+                    'title':'vitesse'
+                },
+                'xaxis': {
+                    'title':'distance'
+                },
+                'hovermode':'closest',
+                'dragmode':'select'
+            }
+        }
+    )
+    children.append(graphSpeed)
+    
+    graphEle = dcc.Graph(
+        id='ele-graph',
+        figure={
+            'data': dataele,
+            'layout': {
+                'height':350,
+                'margin': {
+                    't':30,
+                    'b':30
+                },
+                'yaxis': {
+                    'title':'elevation'
+                },
+                'xaxis': {
+                    'title':'distance'
+                },
+                'hovermode':'closest',
+                'dragmode':'select'
+            }
+        }
+    )
+    children.append(graphEle)
+    
     return [True, title, children]
 
 
