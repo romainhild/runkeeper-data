@@ -17,6 +17,6 @@ And launch the app with
 
 which should give an address to visit with your browser where you have the different graphs and table.
 
-![Rythme](rythme.png)
+![Activities](activity.png)
 
-![Table](table.png)
+![Modal](modal.png)
