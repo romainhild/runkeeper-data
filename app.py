@@ -85,12 +85,69 @@ tables = {
     'Duration_str': {'sort':'Duration','name':'Durée','suffix':''}
 }
 
+def createCardDeck(distance,duration,speed,calories):
+    if duration.total_seconds() < 3600:
+        durationStr = str(duration.components[2])+'m '+str(duration.components[3])+'s'
+    elif duration.total_seconds() < 86400:
+        durationStr = str(duration.components[1])+'h '+str(duration.components[2])+'m '+str(duration.components[3])+'s'
+    else:
+        durationStr = str(duration.components[0])+'j '+str(duration.components[1])+'h '+str(duration.components[2])+'m '+str(duration.components[3])+'s'
+
+    cardDeck = dbc.CardDeck([
+        dbc.Card(color="primary",inverse=True,children=[
+            dbc.CardImg(src="static/distance.png",top=True),
+            dbc.CardBody([
+                html.H5("Distance",className="card-title"),
+                html.P("{:.2f}".format(distance)+" km",className="card-text text-center")
+            ])
+        ]),
+        dbc.Card(color="primary",inverse=True,children=[
+            dbc.CardImg(src="static/duration.png",top=True),
+            dbc.CardBody([
+                html.H5("Durée",className="card-title"),
+                html.P(durationStr,className="card-text text-center")
+            ])
+        ]),
+        dbc.Card(color="primary",inverse=True,children=[
+            dbc.CardImg(src="static/speed.png",top=True),
+            dbc.CardBody([
+                html.H5("Vitesse",className="card-title"),
+                html.P("{:.2f}".format(speed)+" km/h",className="card-text text-center"),
+                # html.P((df['Average Pace'].mean()+ pd.to_datetime('1970/01/01')).strftime('%M:%S')+" min/km",className="card-text text-center")
+            ])
+        ]),
+        dbc.Card(color="primary",inverse=True,children=[
+            dbc.CardImg(src="static/burn.png",top=True),
+            dbc.CardBody([
+                html.H5("Calories",className="card-title"),
+                html.P(str(calories)+" kcal",className="card-text text-center")
+            ])
+        ])
+    ])
+    return cardDeck
 
 #### title
-title = dbc.Container([
-    html.H1(children='Runkeeper Data'),
-    html.H2(children='Statistiques provenant de Runkeeper')
+title = dbc.Row([
+    dbc.Col(
+        [
+            html.H1(children='Runkeeper Data'),
+            html.H2(children='Statistiques provenant de Runkeeper')
+        ],
+        width=4
+    ),
+    dbc.Col(id='carddeck-title',children=createCardDeck(df['Distance (km)'].sum(),df['Duration'].sum(),df['Average Speed (km/h)'].mean(),df['Calories Burned'].sum()), width=8 )
 ])
+
+@app.callback(
+    [dash.dependencies.Output('carddeck-title','children')],
+    [dash.dependencies.Input('example-graph','relayoutData')]
+)
+def updataCard(data):
+    if not data or 'xaxis.range' not in data:
+        return [createCardDeck(df['Distance (km)'].sum(),df['Duration'].sum(),df['Average Speed (km/h)'].mean(),df['Calories Burned'].sum())]
+
+    dff = df.loc[(df['Date'] > data['xaxis.range'][0]) & (df['Date'] < data['xaxis.range'][1])]
+    return [createCardDeck(dff['Distance (km)'].sum(),dff['Duration'].sum(),dff['Average Speed (km/h)'].mean(),dff['Calories Burned'].sum())]
 
 #### activities controls and graph
 activityCol = dbc.Col(
@@ -399,14 +456,14 @@ def update_table(page_current, page_size, sort_by, filter_by, by_cat):
     # we don't want to filter on all columns so we keep only what we need to filter
     dff = df[list(columnsTable)]
     if filter_by:
-        dff = df[list(columnsTable)+['GPX File','Categorie_sort']][dff.apply(lambda row: row.astype(str).str.contains(filter_by).any(), axis=1)]
+        dff = df[list(columnsTable)+['GPX File','Categorie_sort','Calories Burned']][dff.apply(lambda row: row.astype(str).str.contains(filter_by).any(), axis=1)]
     else:
-        dff = df[list(columnsTable)+['GPX File','Categorie_sort']]
+        dff = df[list(columnsTable)+['GPX File','Categorie_sort','Calories Burned']]
 
     if by_cat>= 0:
-        dff = dff[dff['Categorie_sort']==by_cat][list(columnsTable)+['GPX File']]
+        dff = dff[dff['Categorie_sort']==by_cat][list(columnsTable)+['GPX File','Calories Burned']]
     else:
-        dff = dff[list(columnsTable)+['GPX File']]
+        dff = dff[list(columnsTable)+['GPX File','Calories Burned']]
     
     if len(sort_by):
         dff.sort_values(
@@ -494,16 +551,20 @@ def displayModal(n_open,n_close,is_open,dff,rows):
     if not rows:
         return [True,"Attention",{'display':'block'},"Veuillez selectionner au moins une course pour afficher plus d'informations.",{'display':'none'},None,None]
 
-    info = []
+    dff = pd.DataFrame(dff)
+    dff["Duration"] = pd.to_timedelta(dff["Duration"])
+    divinfo = html.Div(dbc.Row(dbc.Col(createCardDeck(dff.iloc[rows]['Distance (km)'].sum(),dff.iloc[rows]['Duration'].sum(),dff.iloc[rows]['Average Speed (km/h)'].mean(),dff.iloc[rows]['Calories Burned'].sum()),width=8),justify='center'))
+    info = [divinfo]
+    
     dates = []
     gpxfiles = []
     # filter rows without gpx file
     for i in rows:
-        if not dff[i]['GPX File']:
-            info.append(html.Div("Pas de données pour la course du "+dff[i]['Date_str']))
+        if not dff.iloc[i]['GPX File']:
+            info.append(html.Div("Pas de données pour la course du "+dff.iloc[i]['Date_str']))
         else:
-            gpxfiles.append(dff[i]['GPX File'])
-        dates.append(dff[i]['Date_str'])
+            gpxfiles.append(dff.iloc[i]['GPX File'])
+        dates.append(dff.iloc[i]['Date_str'])
     if not gpxfiles:
         return [True,"Attention", {'display':'block'}, info, {'display':'none'},None,None]
 
@@ -534,8 +595,8 @@ def displayModal(n_open,n_close,is_open,dff,rows):
             dpt = np.cumsum([dist]+list(map(lambda p: p[0].distance_3d(p[1]), list(zip(seg.points,seg.points[1:])))))
             dist = dpt[-1]
             d['distance'] = pd.Series(dpt)/1000.
-            dff = pd.DataFrame(d)
-            dfg[date]["dff"].append(dff)
+            dfff = pd.DataFrame(d)
+            dfg[date]["dff"].append(dfff)
 
     return [True,title,{'display':'block' if info else 'none'},info or '',{'display':'block'},None,None]
 
@@ -745,6 +806,7 @@ def createEle(style,hoverData,figure):
         'hoverdistance':50,
         'dragmode':'select',
         'selectdirection':'h',
+        'showlegend':len(dataele)>1,
         "uirevision":1
     }
 
