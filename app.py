@@ -1,17 +1,25 @@
 # -*- coding: utf-8 -*-
 import os.path
 import math
+import requests
+import zipfile
+import os
+import glob
+import shutil
 
+import flask
 import dash
 import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
 
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 import numpy as np
 import scipy as sp
+import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -29,43 +37,12 @@ config_plot={'locale':'fr'}
 external_scripts = ['https://cdn.plot.ly/plotly-locale-fr-latest.js']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP],external_scripts=external_scripts)
 
-
-#### prepare database
-df = pd.read_csv("runkeeper-data/cardioActivities.csv")
-df["Rank"] = range(1, len(df)+1)
-df["Date"] = pd.to_datetime(df["Date"])
-df["Date_str"] = df["Date"].dt.strftime('%A %d %B %Y à %H:%M')
-df["Duration_str"] = df["Duration"]
-df["Duration"] = df["Duration"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
-df["Duration"] = pd.to_timedelta(df["Duration"])
-df["Average Pace_str"] = df["Average Pace"]
-df["Average Pace"] = df["Average Pace"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
-df["Average Pace"] = pd.to_timedelta(df["Average Pace"])
-
-catSize = 3
-df["Categorie"] = (catSize*(df["Distance (km)"]//catSize)).astype(int).astype(str)+"-"+(catSize*(1+df["Distance (km)"]//catSize)).astype(int).astype(str)
-df["Categorie_sort"] = (df["Distance (km)"]//catSize).astype(int)
-
-dfw = df.groupby(df.Date.dt.to_period("W")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
-                                                 ('sum', lambda x: x.sum(numeric_only=False)),
-                                                 ('count', 'count')])
-dfm = df.groupby(df.Date.dt.to_period("M")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
-                                                 ('sum', lambda x: x.sum(numeric_only=False)),
-                                                 ('count', 'count')])
-dfy = df.groupby(df.Date.dt.to_period("Y")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
-                                                 ('sum', lambda x: x.sum(numeric_only=False)),
-                                                 ('count', 'count')])
-dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)), 
-                                    ('sum', lambda x: x.sum(numeric_only=False)),
-                                    ('count', 'count')])
-dfg = {}
-
 #### create some dictionaries
 period = {
-    'A': { 'data':df, 'label':'Activité', 'text':'Activité du %d/%m/%Y'},
-    'S': { 'data':dfw, 'label':'Semaine', 'text':'Semaine du %d/%m/%Y'},
-    'M': { 'data':dfm, 'label':'Mois', 'text':'Mois de %B %Y'},
-    'Y': { 'data':dfy, 'label':'Année', 'text':'Année %Y'}
+    'A': { 'label':'Activité', 'text':'Activité du %d/%m/%Y'},
+    'S': { 'label':'Semaine', 'text':'Semaine du %d/%m/%Y'},
+    'M': { 'label':'Mois', 'text':'Mois de %B %Y'},
+    'Y': { 'label':'Année', 'text':'Année %Y'}
 }
 statistiques = {
     'S': {'label':'Vitesse','key':'Average Speed (km/h)','unit':'km/h','agg':'mean','type':'float'},
@@ -84,6 +61,46 @@ tables = {
     'Distance (km)': {'sort':'Distance (km)','name':'Distance','suffix':' km'},
     'Duration_str': {'sort':'Duration','name':'Durée','suffix':''}
 }
+
+#### prepare database
+def prepareDatabase():
+    df = pd.read_csv("runkeeper-data/cardioActivities.csv")
+    df["Rank"] = range(1, len(df)+1)
+    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date_str"] = df["Date"].dt.strftime('%A %d %B %Y à %H:%M')
+    df["Duration_str"] = df["Duration"]
+    df["Duration"] = df["Duration"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
+    df["Duration"] = pd.to_timedelta(df["Duration"])
+    df["Average Pace_str"] = df["Average Pace"]
+    df["Average Pace"] = df["Average Pace"].apply(lambda x: "00:"+x if x.count(':') < 2 else x)
+    df["Average Pace"] = pd.to_timedelta(df["Average Pace"])
+
+    catSize = 3
+    df["Categorie"] = (catSize*(df["Distance (km)"]//catSize)).astype(int).astype(str)+"-"+(catSize*(1+df["Distance (km)"]//catSize)).astype(int).astype(str)
+    df["Categorie_sort"] = (df["Distance (km)"]//catSize).astype(int)
+
+    period['A']['data'] = df
+    period['S']['data'] = df.groupby(df.Date.dt.to_period("W")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
+                                                                     ('sum', lambda x: x.sum(numeric_only=False)),
+                                                                     ('count', 'count')])
+    period['M']['data'] = df.groupby(df.Date.dt.to_period("M")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
+                                                                     ('sum', lambda x: x.sum(numeric_only=False)),
+                                                                     ('count', 'count')])
+    period['Y']['data'] = df.groupby(df.Date.dt.to_period("Y")).agg([('mean',lambda x: x.mean(numeric_only=False)), 
+                                                                     ('sum', lambda x: x.sum(numeric_only=False)),
+                                                                     ('count', 'count')])
+    dfc = df.groupby(df.Categorie).agg([('mean',lambda x: x.mean(numeric_only=False)), 
+                                                        ('sum', lambda x: x.sum(numeric_only=False)),
+                                                        ('count', 'count')])
+
+    locale.setlocale(locale.LC_ALL, 'en_US')
+    lastDate = (df["Date"].max()+datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+    locale.setlocale(locale.LC_ALL, 'fr_FR')
+
+    return df,dfc,catSize,lastDate
+
+df,dfc,catSize,lastDate = prepareDatabase()
+dfg = {}
 
 def createCardDeck(distance,duration,speed,calories):
     if duration.total_seconds() < 3600:
@@ -147,7 +164,10 @@ def updataCard(data):
         return [createCardDeck(df['Distance (km)'].sum(),df['Duration'].sum(),df['Average Speed (km/h)'].mean(),df['Calories Burned'].sum())]
 
     dff = df.loc[(df['Date'] > data['xaxis.range'][0]) & (df['Date'] < data['xaxis.range'][1])]
-    return [createCardDeck(dff['Distance (km)'].sum(),dff['Duration'].sum(),dff['Average Speed (km/h)'].mean(),dff['Calories Burned'].sum())]
+    if dff.shape[0] > 0:
+        return [createCardDeck(dff['Distance (km)'].sum(),dff['Duration'].sum(),dff['Average Speed (km/h)'].mean(),dff['Calories Burned'].sum())]
+    else:
+        return [createCardDeck(df['Distance (km)'].sum(),df['Duration'].sum(),df['Average Speed (km/h)'].mean(),df['Calories Burned'].sum())]
 
 #### activities controls and graph
 activityCol = dbc.Col(
@@ -301,7 +321,7 @@ def update_graph(time,window,nomean,stat):
     data[0]['hovertemplate'] = statistiques[stat]['label'] + ': ' + hoverformat + ' ' + statistiques[stat]['unit']
 
     if not nomean:
-        d = {'x':x,'name':''}
+        d = {'x':x,'line':{'shape':'spline','smoothing':1},'name':''}
         if statistiques[stat]['type'] == 'time':
             yy = pd.to_timedelta(y.dt.total_seconds().rolling(window=window,center=True).mean(),unit='s')
             maxtime = y.max(numeric_only=False)
@@ -814,16 +834,57 @@ def createEle(style,hoverData,figure):
 
 
 ### app layout and title
-app.layout = dbc.Container([
-    title,
-    statRow,
-    catRow,
-    filterRow,
-    dataTable,
-    modal,
-    dcc.Store(id='memory')
-])
+app.layout = dbc.Container(
+    className="pt-3",
+    children=[
+        title,
+        statRow,
+        catRow,
+        filterRow,
+        dataTable,
+        modal,
+        dcc.Store(id='memory'),
+        html.Label(lastDate, id="lastdate",style={'display':'none'}),
+        dcc.Input(id="reload",style={'display':'none'}),
+        html.Button("java",id="java",style={'display':'none'})
+    ]
+)
 app.title = 'Runkeeper-data'
+
+@app.server.route('/post', methods=['POST'])
+def on_post():
+    data = flask.request.get_json()
+    if data['link']:
+        print("updating data...")
+        req = requests.get(data['link'])
+        myfile = './runkeeper-data-export.zip'
+        myfolder = './runkeeper-data-export'
+        open(myfile, 'wb').write(req.content)
+        with zipfile.ZipFile(myfile, 'r') as zip_ref:
+            zip_ref.extractall(myfolder)
+
+        pat = myfolder+'/*.gpx'
+        for f in glob.glob(pat):
+            os.rename(f,f.replace('-export',''))
+
+        try:
+            with open(myfolder.replace('-export','')+"/cardioActivities.csv", "r+") as f2:
+                f2.readline()
+                pos = f2.tell() # remember insertion position
+                f2_remainder = f2.read()    # cache the rest of f2
+                f2.seek(pos)
+                with open(myfolder+"/cardioActivities.csv", "r") as f1:
+                    f1.readline()
+                    f2.write(f1.read())
+                f2.write(f2_remainder)
+                df,dfc,catSize,lastDate = prepareDatabase()
+        except:
+            pass
+    
+        shutil.rmtree(myfolder)
+        os.remove(myfile)
+    return flask.redirect('/')
+
 
 
 if __name__ == '__main__':
