@@ -2,8 +2,8 @@
 
 First, install plotly, with for example conda:
 
-    conda create -n runkeeper-data python="3.8"
-    conda activate runkeeper-data
+    conda create -n runkeeper python="3.8"
+    conda activate runkeeper
     conda install -c plotly -c conda-forge plotly numpy pandas scipy plotly chart-studio dash dash-bootstrap-components gpxpy
 
 then get the address to download your data in your Runkeeper account, and run
