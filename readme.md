@@ -6,7 +6,9 @@ First, install plotly, with for example conda:
     conda activate runkeeper
     conda install -c plotly -c conda-forge plotly numpy pandas scipy plotly chart-studio dash dash-bootstrap-components gpxpy
 
-then get the address to download your data in your Runkeeper account, and run
+You also have to get a token from mapbox.com, it is free, and store it in a file called `.mapbox_token`.
+
+Then get the address to download your data in your Runkeeper account, and run
 
     ./dl-data <address>
 
