@@ -10,6 +10,7 @@ then
 fi
 # folder where anacondo is installed with the jupyter env
 # source ~/miniconda3/etc/profile.d/conda.sh
-source ~/Documents/anaconda3/etc/profile.d/conda.sh
-conda activate jupyter
+# source ~/Documents/anaconda3/etc/profile.d/conda.sh
+source ${CONDA_EXE%/*}/../etc/profile.d/conda.sh
+conda activate runkeeper
 python app.py
