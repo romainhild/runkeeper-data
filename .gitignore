@@ -11,3 +11,6 @@ script-*.js
 
 # mapbox token
 .mapbox_token
+
+.DS_Store
+__pycache__/
