@@ -1,0 +1,25 @@
+{
+  "name": "runkeeper",
+  "version": "1.0.0",
+  "description": "Display Runkeeper data",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/romainhild/runkeeper-data.git"
+  },
+  "author": "Romain Hild",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/romainhild/runkeeper-data/issues"
+  },
+  "homepage": "https://github.com/romainhild/runkeeper-data#readme",
+  "dependencies": {
+    "adm-zip": "^0.5.3",
+    "csv-parse": "^4.15.3",
+    "express": "^4.17.1",
+    "mysql": "^2.18.1"
+  }
+}
