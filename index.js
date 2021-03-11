@@ -1,11 +1,11 @@
-const express = require('express')
-const app = express()
-const https = require('https')
-const fs = require('fs')
-const path = require('path')
-const AdmZip = require('adm-zip')
-const mysql = require('mysql')
-const parse = require('csv-parse')
+const express = require('express');
+const app = express();
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
+const mysql = require('mysql');
+const parse = require('csv-parse');
 
 const rkCsv = {
     "Date": "date",
@@ -19,107 +19,142 @@ const rkCsv = {
     "Climb (m)": "climb",
     "Average Heart Rate (bpm)": "heart_rate",
     "Notes": "notes"
-}
+};
 
-app.use(express.text())
+var con = mysql.createConnection({
+    host: 'localhost',
+    user: 'runkeeper',
+    password: process.env.DB_RK_PASS,
+    database: 'runkeeper'
+});
+con.connect();
+
+app.set('view engine', 'pug');
+app.use(express.text());
+
+app.use(function (req, res, next) {
+  res.set('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 app.post('/update', (req, res) => {
-    const file = fs.createWriteStream("tmp.zip")
+    console.log("post update "+req.body);
+    const file = fs.createWriteStream("tmp.zip");
     var request = https.get(req.body, function(response) {
         if(response.statusCode == 200 ) {
-            response.pipe(file)
+            response.pipe(file);
             file.on('finish', function() {
                 file.close(function() {
                     try {
-                        var zip = new AdmZip("tmp.zip")
+                        var zip = new AdmZip("tmp.zip");
                         zip.extractAllToAsync("tmp", true, function(error) {
                             if(error) {
-                                res.status(400).send("Not able to unzip archive: "+error)
+                                res.status(400).send("Not able to unzip archive: "+error);
                             } else {
-                                update()
-                                res.status(200).send("Activities updated")
+                                update();
+                                res.status(200).send("Activities updated");
                             }
                         })
                     } catch(error) {
-                        res.status(400).send("Not able to unzip archive: "+error)
+                        res.status(400).send("Not able to unzip archive: "+error);
                     }
-                })
-            })
+                });
+            });
         }
         else {
-            fs.unlink("tmp.zip", () => {})
-            res.status(400).send("Not able to download archive")
+            fs.unlink("tmp.zip", () => {});
+            res.status(400).send("Not able to download archive");
         }
-    })
-})
+    });
+});
 
 app.get("/", (req, res) => {
-    res.status(200).send("Ok")
-    console.log("get /")
-})
+    con.query("SELECT * FROM activities;", function(err, result) {
+        if(err) throw err;
+        res.render("template", {data: result, name: "Romain"});
+    });
+    console.log("get /");
+});
+
+app.get("/main.js", (req, res) => {
+    res.sendFile(path.join(__dirname + '/main.js'));
+    console.log("get /main.js");
+});
+app.get("/assets/clock.svg", (req, res) => {
+    res.sendFile(path.join(__dirname + '/assets/clock.svg'));
+    console.log("get /assets/clock.svg");
+});
+app.get("/assets/geo-alt-fill.svg", (req, res) => {
+    res.sendFile(path.join(__dirname + '/assets/geo-alt-fill.svg'));
+    console.log("get /assets/geo-alt-fill.svg");
+});
+app.get("/assets/speedometer.svg", (req, res) => {
+    res.sendFile(path.join(__dirname + '/assets/speedometer.svg'));
+    console.log("get /assets/speedometer.svg");
+});
+app.get("/assets/droplet-fill.svg", (req, res) => {
+    res.sendFile(path.join(__dirname + '/assets/droplet-fill.svg'));
+    console.log("get /assets/droplet-fill.svg");
+});
 
 app.listen(8085, () => {
-    console.log("Serveur à l'écoute sur le port 8085")
+    console.log("Serveur à l'écoute sur le port 8085");
 })
 
 function update() {
-    console.log("update")
-    var con = mysql.createConnection({
-        host: 'localhost',
-        user: 'runkeeper',
-        password: process.env.DB_RK_PASS,
-        database: 'runkeeper'
-    })
-    con.connect(function(err) {
-        if(err) throw err
-        console.log("connected")
-        fs.readdir("tmp", function(err, files) {
+    fs.readdir("tmp", function(err, files) {
+        if(err) {
+            return console.log(err);
+        }
+        const gpxFiles = files.filter(el => path.extname(el) === '.gpx').forEach(el => fs.readFile(path.join("tmp", el), 'utf8', function(err, data) {
             if(err) {
                 return console.log(err);
             }
-            const gpxFiles = files.filter(el => path.extname(el) === '.gpx').forEach(el => fs.readFile(path.join("tmp", el), 'utf8', function(err, data) {
+            con.query("INSERT INTO gpx (data, name) VALUES (?, ?)", [data, el], function(err, result) {
                 if(err) {
-                    return console.log(err);
+                    if(err.errno != 1062) throw err;
+                    return;
                 }
-                con.query("INSERT INTO gpx (data, name) VALUES (?, ?)", [data, el], function(err, result) {
-                    if(err) {
-                        if(err.errno != 1062) throw err;
-                        return;
-                    }
-                    console.log(result);
-                })
-            }))
-            fs.readFile(path.join("tmp", "cardioActivities.csv"), 'utf8', function(err, data) {
-                parse(data, {columns: true}, function(err, rows) {
-                    rows.forEach(function(row) {
-                        // console.log(row)
-                        var keys = [], values = []
-                        Object.keys(rkCsv).forEach(function(k) {
-                            if( k in row && row[k] ) {
-                                keys.push(rkCsv[k])
-                                values.push(row[k])
+            });
+        }));
+        fs.readFile(path.join("tmp", "cardioActivities.csv"), 'utf8', function(err, data) {
+            parse(data, {columns: true}, function(err, rows) {
+                rows.forEach(function(row) {
+                    // console.log(row);
+                    var keys = [], values = [];
+                    Object.keys(rkCsv).forEach(function(k) {
+                        if( k in row && row[k] ) {
+                            keys.push(rkCsv[k]);
+                            if( k == "Duration" || k == "Average Pace" ) {
+                                let haveHour = row[k].split(':').length == 3;
+                                if( !haveHour )
+                                    values.push("00:"+row[k]);
+                                else
+                                    values.push(row[k]);
                             }
-                        })
-                        if( "GPX File" in row && row["GPX File"] ) {
-                            con.query("SELECT id FROM gpx WHERE name = ?", [row["GPX File"]], function(err, result) {
-                                if(err) throw err;
-                                if( result && result.length > 0 ) {
-                                    keys.push("gpx")
-                                    values.push(result[0].id)
-                                }
-                                insertActivity(con, keys, values)
-                            })
+                            else
+                                values.push(row[k]);
                         }
-                        else {
+                    });
+                    if( "GPX File" in row && row["GPX File"] ) {
+                        con.query("SELECT id FROM gpx WHERE name = ?", [row["GPX File"]], function(err, result) {
+                            if(err) throw err;
+                            if( result && result.length > 0 ) {
+                                keys.push("gpx");
+                                values.push(result[0].id);
+                            }
                             insertActivity(con, keys, values)
-                        }
-                    })
-                })
-            })
-        })
-    })
-    // fs.unlink("tmp.zip", () => {})
-    // fs.rmdir("tmp", {recursive: true}, () => {})
+                        });
+                    }
+                    else {
+                        insertActivity(con, keys, values);
+                    }
+                });
+            });
+        });
+    });
+    // fs.unlink("tmp.zip", () => {});
+    // fs.rmdir("tmp", {recursive: true}, () => {});
 }
 
 function insertActivity(con, keys, values) {
@@ -128,6 +163,5 @@ function insertActivity(con, keys, values) {
             if(err.errno != 1062) throw err;
             return;
         }
-        console.log(result);
     })
 }

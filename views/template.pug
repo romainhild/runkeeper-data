@@ -1,0 +1,93 @@
+doctype html
+html
+    head
+        meta(charset="utf-8")
+        title Runkeeper Data
+        link(rel='stylesheet', href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous")
+        script(src="https://cdn.plot.ly/plotly-latest.min.js")
+        script(src="https://cdn.plot.ly/plotly-locale-fr-latest.js")
+        script(src="https://gmousse.github.io/dataframe-js/dist/dataframe.min.js")
+        script(src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js")
+        script(src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.min.js")
+    body
+        .container
+            h1 Runkeeper Data
+            .row
+                .col
+                    .card
+                        .card-body
+                            img(class="card-img-top img-fluid" src="assets/clock.svg")
+                            h5.card-title Duree totale
+                            p(class="card-text" id="cardDuration")
+                .col
+                    .card
+                        .card-body
+                            img(class="card-img-top img-fluid" src="assets/geo-alt-fill.svg")
+                            h5.card-title Distance totale
+                            p(class="card-text" id="cardDistance")
+                .col
+                    .card
+                        .card-body
+                            img(class="card-img-top img-fluid" src="assets/speedometer.svg")
+                            h5.card-title Vitesse moyenne
+                            p(class="card-text" id="cardSpeed")
+                .col
+                    .card
+                        .card-body
+                            img(class="card-img-top img-fluid" src="assets/droplet-fill.svg")
+                            h5.card-title Calories totales
+                            p(class="card-text" id="cardCalories")
+            .row.align-items-center
+                .col-4
+                    .card
+                        .card-body
+                            .row
+                                .col
+                                    h5 Statistiques
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatVitesse" value="mean_speed" checked)
+                                        label(class="form-check-label" for="StatVitesse") Vitesse
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatRythme" value="mean_pace")
+                                        label(class="form-check-label" for="StatRythme") Rythme
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatDureeTot" value="sum_duration")
+                                        label(class="form-check-label" for="StatDureeTot") Durée totale
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatDureeMoy" value="mean_duration")
+                                        label(class="form-check-label" for="StatDureeMoy") Durée Moyenne
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatDistTot" value="sum_distance")
+                                        label(class="form-check-label" for="StatDistTot") Distance totale
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatDistMoy" value="mean_distance")
+                                        label(class="form-check-label" for="StatDistMoy") Distance moyenne
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="Statistiques" onchange="statChange(this.value)" id="StatActivite" value="sum_activite")
+                                        label(class="form-check-label" for="StatActivite") Activités
+                                .col
+                                    h5 Par
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="StatBy" onchange="byChange(this.value)" value="date" checked)
+                                        label(class="form-check-label" for="StatByAct") Activité
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="StatBy" onchange="byChange(this.value)" value="week")
+                                        label(class="form-check-label" for="StatByWeek") Semaine
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="StatBy" onchange="byChange(this.value)" value="month")
+                                        label(class="form-check-label" for="StatByMonth") Mois
+                                    .form-check
+                                        input(class="form-check-input" type="radio" name="StatBy" onchange="byChange(this.value)" value="year")
+                                        label(class="form-check-label" for="StatByYear") Année
+                            .row
+                                .form-check.form-switch
+                                    label(class="form-label" for="rangeAvg" id="labelAvg") Moyenne sur 1 activité
+                                    input(class="form-range" type="range" min="1" max="15" step="1" id="rangeAvg" value="1" oninput="rangeInput(this.value)" onchange="rangeChange(this.value)")
+                                    
+
+                .col-8
+                    #test
+        script.
+            data = !{JSON.stringify(data)};
+        script(src='/main.js')
+        script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous")
