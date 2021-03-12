@@ -31,16 +31,28 @@ function formatDuration(d, precision=9) {
     return s.trim();
 }
 
-function updateCards() {
-    let distance = df.reduce((p,n) => p+n.get('distance'), 0);
+function updateCards(eventData) {
+    var dff = df;
+    var range = [];
+    if( 'xaxis.range' in eventData )
+        range = eventData['xaxis.range'];
+    if( 'xaxis.range[0]' in eventData && 'xaxis.range[1]' in eventData ) {
+        range.push(eventData['xaxis.range[0]']);
+        range.push(eventData['xaxis.range[1]']);
+    }
+    if( range.length > 0 )
+        dff = df.where(row => row.get('date') > range[0] && row.get('date') < range[1]);
+
+    let distance = dff.reduce((p,n) => p+n.get('distance'), 0);
     document.getElementById("cardDistance").innerHTML = distance.toFixed(2)+" km";
-    let cal = df.reduce((p,n) => p+n.get('calories'), 0);
+    let cal = dff.reduce((p,n) => p+n.get('calories'), 0);
     document.getElementById("cardCalories").innerHTML = cal+" kcal";
-    let duration = df.reduce((p,n) => p.add(moment.duration({minutes:n.get('duration').split(':')[0],
-                                                             seconds:n.get('duration').split(':')[1]}
-                                                           )), moment.duration(0));
+    let duration = dff.reduce((p,n) => p.add(moment.duration({hours:n.get('duration').split(':')[0],
+                                                              minutes:n.get('duration').split(':')[1],
+                                                              seconds:n.get('duration').split(':')[2]}
+                                                            )), moment.duration(0));
     document.getElementById("cardDuration").innerHTML = formatDuration(duration, 2);
-    let speed = df.reduce((p,n) => p + n.get('speed'), 0)/df.count();
+    let speed = dff.reduce((p,n) => p + n.get('speed'), 0)/dff.count();
     document.getElementById("cardSpeed").innerHTML = speed.toFixed(2)+ "km/h";
 }
 
@@ -188,7 +200,9 @@ function plotGraph(typeStat, by, avg) {
     }
     let config = {locale: 'fr', responsive: true};
     Plotly.newPlot("test", plot, layout, config );
+    document.getElementById("test").on('plotly_relayout', updateCards);
 }
+
 
 var DataFrame = dfjs.DataFrame;
 var df = new DataFrame(data);
@@ -221,4 +235,4 @@ let periods = {
 };
 
 plotGraph("mean_speed", "date", 1);
-updateCards();
+updateCards({});
