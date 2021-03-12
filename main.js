@@ -44,15 +44,19 @@ function updateCards() {
     document.getElementById("cardSpeed").innerHTML = speed.toFixed(2)+ "km/h";
 }
 
-function movingAvg(array, count) {
+function movingAvg(array, count, isTime) {
     var r = [], i;
-    for(i = 0; i < array.length - count+1; i++) {
+    var arr = array;
+    if( isTime )
+        arr = array.map(x => moment(x).unix());
+    for(i = 0; i < arr.length - count+1; i++) {
         var a = 0, j;
-        for(j = 0; j < count; j++) {
-            a = a + array[i+j];
-        }
+        for(j = 0; j < count; j++)
+            a = a + arr[i+j];
         r.push(a/count);
     }
+    if( isTime )
+        return r.map(x => moment.unix(x).utc().format());
     return r;
 }
 
@@ -92,17 +96,8 @@ function aggregate(group, stat, type) {
         let sum = group.reduce((p, n) => p.add(moment.duration({hours:n.get(stat).split(':')[0], minutes:n.get(stat).split(':')[1], seconds:n.get(stat).split(':')[2]})), moment.duration(0)).asSeconds();
         if( type == "mean" ) {
             return sum/group.count();
-            // let avg = sum.asSeconds()/group.count();
-            // let avgM = moment.duration({seconds: avg});
-            // return avgM.hours()+":"+avgM.minutes()+":"+avgM.seconds();
-            // return avg; //moment.duration({seconds: avg}).asSeconds();
         } else {
             return sum;
-            // if( sum.asDays() > 1 )
-            //     return sum.asHours();
-            // else
-            //     return sum.hours()+":"+sum.minutes()+":"+sum.seconds();
-            // return sum.asSeconds();
         }
     } else {
         if( type == "mean" ) {
@@ -142,6 +137,7 @@ function plotGraph(typeStat, by, avg) {
     dff = df.groupBy(by).aggregate(group => aggregate(group, stat, type));
     var hoverformat = '%{y}';
     var customdata = []
+    var isTime = false;
     if( stats[stat]['type'] == 'time' ) {
         let max = dff.reduce((p,n) => Math.max(p, n.get('aggregation')), 0);
         if( max > 3600*24 ) {
@@ -152,20 +148,19 @@ function plotGraph(typeStat, by, avg) {
                 row => row.set('minutes', row.get('duration').minutes()),
                 row => row.set('seconds', row.get('duration').seconds())
             );
-            customdataDf = customdataDf.drop('aggregation');
-            customdataDf = customdataDf.drop(by);
-            customdataDf = customdataDf.drop('duration');
-            customdata = customdataDf.toArray()
+            customdata = customdataDf.drop('aggregation').drop(by).drop('duration').toArray()
             dff = dff.map(row => row.set('aggregation', moment.duration({seconds:row.get('aggregation')}).asHours()));
             layout['yaxis']['title'] = "h";
             hoverformat = '%{customdata[0]}j %{customdata[1]}h %{customdata[2]}m %{customdata[3]}s';
         }
         else if( max > 3600 ) {
-            dff = dff.map(row => row.set('aggregation', moment(row.get('aggregation')*1000).utc().format()));
+            isTime = true;
+            dff = dff.map(row => row.set('aggregation', moment.unix(row.get('aggregation')).utc().format()));
             layout['yaxis']['tickformat'] = '%H:%M:%S';
         }
         else {
-            dff = dff.map(row => row.set('aggregation', moment(row.get('aggregation')*1000).utc().format()));
+            isTime = true;
+            dff = dff.map(row => row.set('aggregation', moment.unix(row.get('aggregation')).utc().format()));
             layout['yaxis']['tickformat'] = '%M:%S';
         }
     }
@@ -184,8 +179,8 @@ function plotGraph(typeStat, by, avg) {
             byL = byL + 's';
         }
         plot.push({
-            x:dff.slice(avg-1).toArray(by),
-            y:movingAvg(dff.sortBy(by).toArray("aggregation"), avg),
+            x:dff.sortBy(by).slice(avg-1).toArray(by),
+            y:movingAvg(dff.sortBy(by).toArray("aggregation"), avg, isTime),
             type: 'lines',
             hovertemplate: 'Moyenne sur '+avg+' '+byL,
             hoverlabel: {namelength:0}
@@ -227,4 +222,3 @@ let periods = {
 
 plotGraph("mean_speed", "date", 1);
 updateCards();
-
