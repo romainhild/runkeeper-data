@@ -135,6 +135,7 @@ function plotGraph(typeStat, by, avg) {
     var layout = {
         showlegend:false,
         title:stats[stat]['label'],
+        hovermode: 'x unified',
         xaxis: {
             rangeselector: selectorOptions,
             rangeslider: {},
@@ -147,7 +148,7 @@ function plotGraph(typeStat, by, avg) {
     };
 
     dff = df.groupBy(by).aggregate(group => aggregate(group, stat, type));
-    var hoverformat = '%{y}';
+    var hoverformat = stats[stat]['type'] == 'float' ? '%{y:.2f}' : '%{y:d}';
     var customdata = []
     var isTime = false;
     if( stats[stat]['type'] == 'time' ) {
@@ -190,11 +191,13 @@ function plotGraph(typeStat, by, avg) {
         if( !byL.endsWith('s') ) {
             byL = byL + 's';
         }
+        if( stats[stat]['type'] == 'int' )
+            hoverformat = '%{y:.2f}';
         plot.push({
             x:dff.sortBy(by).slice(avg-1).toArray(by),
             y:movingAvg(dff.sortBy(by).toArray("aggregation"), avg, isTime),
             type: 'lines',
-            hovertemplate: 'Moyenne sur '+avg+' '+byL,
+            hovertemplate: 'Moyenne sur '+avg+' '+byL + ': ' + hoverformat + ' ' + stats[stat]['unit'],
             hoverlabel: {namelength:0}
         });
     }
@@ -203,6 +206,45 @@ function plotGraph(typeStat, by, avg) {
     document.getElementById("test").on('plotly_relayout', updateCards);
 }
 
+function rankFormatter(value, row, index) {
+    return index+1;
+}
+
+function dateFormatter(value) {
+    return moment(value).format('LLLL');
+}
+
+function paceFormatter(value) {
+    let pace = moment.duration(value);
+    return String(pace.minutes()).padStart(2, '0')+':'+String(pace.seconds()).padStart(2, '0')+' min/km';
+}
+
+function durationFormatter(value) {
+    return formatDuration(moment.duration(value));
+}
+
+function tableButtons() {
+    return{
+        btnUsersAdd: {
+            text: "Plus d'info",
+            event: function () {
+                modal($('#table').bootstrapTable('getSelections'))
+            }
+        }
+    }
+}
+
+function clickCell(field, value, row, element) {
+    if( field == 7 ) {
+        $('#table').bootstrapTable('uncheckAll')
+        modal([row]);
+    }
+}
+
+function modal(rows) {
+    console.log("plus info sur");
+    console.log(rows);
+}
 
 var DataFrame = dfjs.DataFrame;
 var df = new DataFrame(data);
@@ -214,6 +256,7 @@ let catSize = 3;
 df = df.withColumn('category', row => catSize*Math.floor(row.get('distance')/catSize)+"-"+catSize*(1+Math.floor(row.get('distance')/catSize)));
 
 moment.relativeTimeThreshold('s', 60);
+moment.relativeTimeThreshold('ss', 0);
 moment.relativeTimeThreshold('m', 60);
 moment.relativeTimeThreshold('h', 24);
 moment.relativeTimeThreshold('d', 7);
@@ -236,3 +279,33 @@ let periods = {
 
 plotGraph("mean_speed", "date", 1);
 updateCards({});
+
+var data = df.toCollection();
+var $table = $('#table')
+$table.bootstrapTable({
+    clickToSelect: true,
+    search: true,
+    buttons: "tableButtons",
+    showButtonText: true,
+    toolbar: "#toolbar",
+    onClickCell: clickCell,
+    data: data})
+
+let categorySelect = document.getElementById("tableCategory");
+let categories = df.unique('category').sortBy('category').toArray('category');
+categories.forEach(function(cat) {
+    var opt = document.createElement('option');
+    opt.value = cat;
+    opt.text = cat;
+    categorySelect.appendChild(opt);
+});
+categorySelect.addEventListener('change', (event) => {
+    var cat = event.target.value;
+    var filter;
+    if( cat == "all" )
+        filter = {};
+    else
+        filter = {category: cat};
+    console.log(filter);
+    $table.bootstrapTable('filterBy', filter)
+});

@@ -4,11 +4,16 @@ html
         meta(charset="utf-8")
         title Runkeeper Data
         link(rel='stylesheet', href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous")
+        link(rel="stylesheet" href="https://unpkg.com/bootstrap-table@1.18.2/dist/bootstrap-table.min.css")
+        link(rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.4.0/font/bootstrap-icons.css")
         script(src="https://cdn.plot.ly/plotly-latest.min.js")
         script(src="https://cdn.plot.ly/plotly-locale-fr-latest.js")
         script(src="https://gmousse.github.io/dataframe-js/dist/dataframe.min.js")
         script(src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js")
         script(src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.min.js")
+        script(src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous")
+        script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous")
+        script(src="https://unpkg.com/bootstrap-table@1.18.2/dist/bootstrap-table.min.js")
     body
         .container
             h1 Runkeeper Data
@@ -87,7 +92,25 @@ html
 
                 .col-8
                     #test
+            .row
+                #toolbar
+                    .input-group
+                        .input-group-prepend
+                            label(class="input-group-text" for="tableCategory") Categorie:
+                        select(class="custom-select" id="tableCategory" name="tableCategory")
+                            option(value="all" selected) Toutes
+                table(id="table" style="margin-bottom=50px")
+                    thead
+                        tr
+                            th(data-formatter="rankFormatter") Rang
+                            th(data-field="state" data-checkbox="true")
+                            th(data-field="date" data-formatter="dateFormatter" data-sortable="true") Date
+                            th(data-field="speed" data-formatter="%s km/h" data-sortable="true") Vitesse
+                            th(data-field="pace" data-formatter="paceFormatter" data-sortable="true") Rythme
+                            th(data-field="distance" data-formatter="%s km" data-sortable="true") Distance
+                            th(data-field="duration" data-formatter="durationFormatter" data-sortable="true") Durée
+                            th(data-formatter='<i class="bi bi-chevron-right"></i>')
+
         script.
             data = !{JSON.stringify(data)};
         script(src='/main.js')
-        script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous")
