@@ -6,6 +6,8 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const mysql = require('mysql');
 const parse = require('csv-parse');
+const bodyParser = require('body-parser');
+
 
 const rkCsv = {
     "Date": "date",
@@ -21,10 +23,12 @@ const rkCsv = {
     "Notes": "notes"
 };
 
+const secrets = require('./secrets');
+
 var con = mysql.createConnection({
     host: 'localhost',
     user: 'runkeeper',
-    password: process.env.DB_RK_PASS,
+    password: secrets.db_rk_password,
     database: 'runkeeper'
 });
 con.connect();
@@ -36,6 +40,9 @@ app.use(function (req, res, next) {
   res.set('Access-Control-Allow-Origin', '*');
   next();
 });
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: true}));
 
 app.post('/update', (req, res) => {
     console.log("post update "+req.body);
@@ -68,10 +75,19 @@ app.post('/update', (req, res) => {
     });
 });
 
+app.post("/gpx", (req, res) => {
+    console.log("post /gpx");
+    let ids = req.body.ids;
+    con.query( "select * from gpx where id IN ("+ con.escape(ids)+")", function(err, result) {
+        if(err) throw err;
+        res.status(200).send(result);
+    })
+});
+
 app.get("/", (req, res) => {
     con.query("SELECT * FROM activities;", function(err, result) {
         if(err) throw err;
-        res.render("template", {data: result, name: "Romain"});
+        res.render("template", {data: result, mapbox_token: secrets.mapbox_token});
     });
     console.log("get /");
 });
@@ -95,6 +111,14 @@ app.get("/assets/speedometer.svg", (req, res) => {
 app.get("/assets/droplet-fill.svg", (req, res) => {
     res.sendFile(path.join(__dirname + '/assets/droplet-fill.svg'));
     console.log("get /assets/droplet-fill.svg");
+});
+app.get("/node_modules/gpxparser/dist/GPXParser.min.js", (req, res) => {
+    res.sendFile(path.join(__dirname + '/node_modules/gpxparser/dist/GPXParser.min.js'));
+    console.log("get /node_modules/gpxparser/dist/GPXParser.min.js");
+});
+app.get("/js/polyfit.js/index.js", (req, res) => {
+    res.sendFile(path.join(__dirname + '/js/polyfit.js/index.js'));
+    console.log("get /js/polyfit.js/index.js");
 });
 
 app.listen(8085, () => {

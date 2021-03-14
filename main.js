@@ -43,17 +43,27 @@ function updateCards(eventData) {
     if( range.length > 0 )
         dff = df.where(row => row.get('date') > range[0] && row.get('date') < range[1]);
 
+    let r = getCardsLabels(dff);
+    document.getElementById("cardDistance").innerHTML = r['distance'];
+    document.getElementById("cardCalories").innerHTML = r['calories'];
+    document.getElementById("cardDuration").innerHTML = r['duration'];
+    document.getElementById("cardSpeed").innerHTML = r['speed'];
+}
+
+function getCardsLabels(dff) {
+    var r = {}
     let distance = dff.reduce((p,n) => p+n.get('distance'), 0);
-    document.getElementById("cardDistance").innerHTML = distance.toFixed(2)+" km";
+    r['distance'] = distance.toFixed(2)+" km";
     let cal = dff.reduce((p,n) => p+n.get('calories'), 0);
-    document.getElementById("cardCalories").innerHTML = cal+" kcal";
+    r["calories"] = cal+" kcal";
     let duration = dff.reduce((p,n) => p.add(moment.duration({hours:n.get('duration').split(':')[0],
                                                               minutes:n.get('duration').split(':')[1],
                                                               seconds:n.get('duration').split(':')[2]}
                                                             )), moment.duration(0));
-    document.getElementById("cardDuration").innerHTML = formatDuration(duration, 2);
+    r["duration"] = formatDuration(duration, 2);
     let speed = dff.reduce((p,n) => p + n.get('speed'), 0)/dff.count();
-    document.getElementById("cardSpeed").innerHTML = speed.toFixed(2)+ "km/h";
+    r["speed"] = speed.toFixed(2)+ "km/h";
+    return r;
 }
 
 function movingAvg(array, count, isTime) {
@@ -69,6 +79,23 @@ function movingAvg(array, count, isTime) {
     }
     if( isTime )
         return r.map(x => moment.unix(x).utc().format());
+    return r;
+}
+
+function movingSpeed(cumul, times) {
+    let r = times.map(function(tTrack, iTrack) {
+        let timesT = tTrack;
+        let cumulT = cumul[iTrack];
+        return timesT.map(function(tn, i) {
+            if( i == 0 && i+1 < cumulT.length ) {
+                return cumulT[1]/timesT[1].diff(tn)*3600;
+            } else if( i == cumulT.length-1 && i-1 >= 0 ) {
+                return (cumulT[i]-cumulT[i-1])/tn.diff(timesT[i-1])*3600
+            } else {
+                return (cumulT[i+1]-cumulT[i-1])/timesT[i+1].diff(timesT[i-1])*3600;
+            }
+        });
+    });
     return r;
 }
 
@@ -211,7 +238,7 @@ function rankFormatter(value, row, index) {
 }
 
 function dateFormatter(value) {
-    return moment(value).format('LLLL');
+    return moment(value).utc().format('LLLL');
 }
 
 function paceFormatter(value) {
@@ -221,6 +248,47 @@ function paceFormatter(value) {
 
 function durationFormatter(value) {
     return formatDuration(moment.duration(value));
+}
+
+function distGeo(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const phi1 = lat1 * Math.PI/180;
+    const phi2 = lat2 * Math.PI/180;
+    // var deltaPhi = 0;
+    var deltaPhi = (lat2-lat1) * Math.PI/180;
+    var deltaLambda = (lon2-lon1) * Math.PI/180;
+    var a = Math.sin(deltaPhi/2) * Math.sin(deltaLambda/2) +
+        Math.cos(phi1) * Math.cos(phi1) *
+        Math.sin(deltaPhi/2) * Math.sin(deltaLambda/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dx = R*c;
+    return {dx: dx, dy:dx};
+
+    // deltaPhi = (lat2-lat1) * Math.PI/180;
+    // deltaLambda = 0;
+    // a = Math.sin(deltaPhi/2) * Math.sin(deltaLambda/2) +
+    //     Math.cos(phi1) * Math.cos(phi2) *
+    //     Math.sin(deltaPhi/2) * Math.sin(deltaLambda/2);
+    // c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // const dy = R*c;
+    return {dx: dx, dy:dy};
+}
+
+function zoomCenter(bounds) {
+    let dxdy = distGeo(bounds.minLat, bounds.minLon, bounds.maxLat, bounds.maxLon);
+    let dx = dxdy.dx;
+    let dy = dxdy.dy;
+    console.log(dx);
+    console.log(dy);
+    // number of pixel on the graph on MY screen !!
+    let npx = 800
+    let npy = 300
+    // meter per pixel at zoom level 0 by latitude
+    let mp0 = (x) => 109*Math.pow(x,4)/480000 + 83*Math.pow(x,3)/12000 - 14569*Math.pow(x,2)/1200 + (67*x)/30 + 78271;
+    // we fit mp0(lat)/(2**z) meter/pixel at zoom level z and latitude lat
+    let zoomx = Math.log2(mp0(bounds.minLat+(bounds.maxLat-bounds.minLat)/2)*npx/dx)
+    let zoomy = Math.log2(mp0(bounds.minLat+(bounds.maxLat-bounds.minLat)/2)*npy/dy)
+    return {zoom: Math.min(zoomx,zoomy), center: {'lat':bounds.minLat+(bounds.maxLat-bounds.minLat)/2,'lon':bounds.minLon+(bounds.maxLon-bounds.minLon)/2}}
 }
 
 function tableButtons() {
@@ -242,8 +310,155 @@ function clickCell(field, value, row, element) {
 }
 
 function modal(rows) {
-    console.log("plus info sur");
-    console.log(rows);
+    if( rows.length == 0 )
+        return;
+    dff = new DataFrame(rows);
+
+    var title = dff.count() == 1 ? "Course du " : "Courses du ";
+    title = title + dff.toArray('date').map(d => moment(d).format('LLLL')).join(', ');
+    document.getElementById("modalTitle").innerHTML = title;
+    
+    let r = getCardsLabels(dff);
+    document.getElementById("cardDistanceModal").innerHTML = r['distance'];
+    document.getElementById("cardCaloriesModal").innerHTML = r['calories'];
+    document.getElementById("cardDurationModal").innerHTML = r['duration'];
+    document.getElementById("cardSpeedModal").innerHTML = r['speed'];
+
+    let gpxIds = dff.dropMissingValues(['gpx']).toArray('gpx');
+    if( gpxIds.length > 0 ) {
+        $.post(window.location.href+"/gpx", {ids: gpxIds},
+               function(data, status){
+                   if(status == "success")
+                       createModalPlots(dff, data);
+               });
+    }
+    var myModal = new bootstrap.Modal(document.getElementById('activityModal'))
+    myModal.show();
+}
+
+function createModalPlots(dff, data) {
+    console.log(data);
+    let gpxs = {}
+    data.forEach(function(d) {
+        var gpx = new gpxParser();
+        gpx.parse(d.data)
+        gpxs[d.id] = gpx;
+    });
+    dff = dff.withColumn('lon', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let gpx = gpxs[row.get('gpx')];
+        let pts = [];
+        gpx.tracks.forEach(track => pts.push(track.points.map(pt => pt.lon)));
+        return pts;
+    });
+    dff = dff.withColumn('lat', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let gpx = gpxs[row.get('gpx')];
+        let pts = [];
+        gpx.tracks.forEach(track => pts.push(track.points.map(pt => pt.lat)));
+        return pts;
+    });
+    dff = dff.withColumn('ele', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let gpx = gpxs[row.get('gpx')];
+        let pts = [];
+        gpx.tracks.forEach(track => pts.push(track.points.map(pt => pt.ele)));
+        return pts;
+    });
+    dff = dff.withColumn('times', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let gpx = gpxs[row.get('gpx')];
+        let pts = [];
+        gpx.tracks.forEach(track => pts.push(track.points.map(pt => moment(pt.time))));
+        return pts;
+    });
+    dff = dff.withColumn('cumul_dist', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let gpx = gpxs[row.get('gpx')];
+        let pts = [];
+        gpx.tracks.forEach(track => pts.push(track.distance.cumul));
+        return pts;
+    });
+    dff = dff.withColumn('inst_speed', function(row) {
+        if( !row.get('gpx') )
+            return;
+        let dist = row.get('cumul_dist');
+        let times = row.get('times');
+        return movingSpeed(dist, times);
+    });
+    createMapPlot(dff);
+}
+
+function createMapPlot(dff) {
+    console.log(dff);
+    var bounds = {minLat: 90, maxLat: -90, minLon: 180, maxLon: -180};
+    var data = dff.reduce(function(data, row) {
+        let lons = row.get('lon'), lats = row.get('lat');
+        lons.forEach(function(lon, i) {
+            bounds.minLon = Math.min(bounds.minLon, Math.min(...lon));
+            bounds.maxLon = Math.max(bounds.maxLon, Math.max(...lon));
+            bounds.minLat = Math.min(bounds.minLat, Math.min(...lats[i]));
+            bounds.maxLat = Math.max(bounds.maxLat, Math.max(...lats[i]));
+            dataT = {
+                type: 'scattermapbox',
+                mode: 'markers+lines',
+                name: moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss'),
+                lon: lon,
+                lat: lats[i]
+            };
+            data.push(dataT);
+        });
+        return data;
+    }, []);
+    // console.log(data);
+    let zc = zoomCenter(bounds);
+    let layoutmap = {
+        'mapbox': {
+            'style':'basic',
+            'accesstoken':mapbox_token,
+            'center': {
+                'lat':zc.center['lat'],
+                'lon':zc.center['lon']
+            },
+            'zoom':zc.zoom
+        },
+        'height':350,
+        'margin': {
+            't':30,
+            'b':0
+        },
+        'showlegend':data.length>3,
+        "uirevision":1
+    }
+    // var layout = {
+    //     title: 'Canadian cities',
+    //     // geo: {
+    //     //     scope: 'europe',
+    //     //     resolution: 50,
+    //     //     lonaxis: {
+    //     //         'range': [-130, -55]
+    //     //     },
+    //     //     lataxis: {
+    //     //         'range': [40, 70]
+    //     //     },
+    //     //     showrivers: true,
+    //     //     rivercolor: '#fff',
+    //     //     showlakes: true,
+    //     //     lakecolor: '#fff',
+    //     //     showland: true,
+    //     //     landcolor: '#EAEAAE',
+    //     //     countrycolor: '#d3d3d3',
+    //     //     countrywidth: 1.5,
+    //     //     subunitcolor: '#d3d3d3'
+    //     // }
+    // };
+
+    Plotly.newPlot('mapPlot', data, layoutmap);
 }
 
 var DataFrame = dfjs.DataFrame;
@@ -280,7 +495,7 @@ let periods = {
 plotGraph("mean_speed", "date", 1);
 updateCards({});
 
-var data = df.toCollection();
+var data = df.sortBy("date", true).toCollection();
 var $table = $('#table')
 $table.bootstrapTable({
     clickToSelect: true,
@@ -309,3 +524,4 @@ categorySelect.addEventListener('change', (event) => {
     console.log(filter);
     $table.bootstrapTable('filterBy', filter)
 });
+

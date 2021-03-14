@@ -14,6 +14,7 @@ html
         script(src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous")
         script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous")
         script(src="https://unpkg.com/bootstrap-table@1.18.2/dist/bootstrap-table.min.js")
+        script(src="./node_modules/gpxparser/dist/GPXParser.min.js")
     body
         .container
             h1 Runkeeper Data
@@ -111,6 +112,49 @@ html
                             th(data-field="duration" data-formatter="durationFormatter" data-sortable="true") Durée
                             th(data-formatter='<i class="bi bi-chevron-right"></i>')
 
+        div(class="modal fade" id="activityModal" tabindex="-1")
+            .modal-dialog.modal-xl
+                .modal-content
+                    .modal-header
+                        h5.modal-title(id="modalTitle") 
+                        button.btn-close(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    .modal-body
+                        .container
+                            .row
+                                .col
+                                    .card
+                                        .card-body
+                                            img(class="card-img-top img-fluid w-50 mx-auto d-block" src="assets/clock.svg")
+                                            h5.card-title.text-center Duree totale
+                                            p(class="card-text" id="cardDurationModal")
+                                .col
+                                    .card
+                                        .card-body
+                                            img(class="card-img-top img-fluid w-50 mx-auto d-block" src="assets/geo-alt-fill.svg")
+                                            h5.card-title.text-center Distance totale
+                                            p(class="card-text" id="cardDistanceModal")
+                                .col
+                                    .card
+                                        .card-body
+                                            img(class="card-img-top img-fluid w-50 mx-auto d-block" src="assets/speedometer.svg")
+                                            h5.card-title.text-center Vitesse moyenne
+                                            p(class="card-text" id="cardSpeedModal")
+                                .col
+                                    .card
+                                        .card-body
+                                            img(class="card-img-top img-fluid w-50 mx-auto d-block" src="assets/droplet-fill.svg")
+                                            h5.card-title.text-center Calories totales
+                                            p(class="card-text" id="cardCaloriesModal")
+                            .row
+                                #mapPlot
+                            .row
+                                #speedPlot
+                            .row
+                                #elevationPlot
+                    .modal-footer
+                        button(type="button" class="btn btn-primary" data-bs-dismiss="modal") Close
+
         script.
             data = !{JSON.stringify(data)};
+            mapbox_token = !{JSON.stringify(mapbox_token)};
         script(src='/main.js')
