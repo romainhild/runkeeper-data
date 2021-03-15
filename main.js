@@ -278,8 +278,8 @@ function zoomCenter(bounds) {
     let dxdy = distGeo(bounds.minLat, bounds.minLon, bounds.maxLat, bounds.maxLon);
     let dx = dxdy.dx;
     let dy = dxdy.dy;
-    console.log(dx);
-    console.log(dy);
+    // console.log(dx);
+    // console.log(dy);
     // number of pixel on the graph on MY screen !!
     let npx = 800
     let npy = 300
@@ -337,7 +337,7 @@ function modal(rows) {
 }
 
 function createModalPlots(dff, data) {
-    console.log(data);
+    // console.log(data);
     let gpxs = {}
     data.forEach(function(d) {
         var gpx = new gpxParser();
@@ -391,31 +391,65 @@ function createModalPlots(dff, data) {
         let times = row.get('times');
         return movingSpeed(dist, times);
     });
-    createMapPlot(dff);
+    let map = createMapPlot(dff);
+    let speed = createSpeedPlot(dff);
+    let ele = createElevationPlot(dff);
+
+    $('#activityModal').on('shown.bs.modal', function (e) {
+        Plotly.newPlot('mapPlot', map.data, map.layout);
+        Plotly.newPlot('speedPlot', speed.data, speed.layout);
+        Plotly.newPlot('elevationPlot', ele.data, ele.layout);   
+
+        document.getElementById('mapPlot').on('plotly_hover', function(data) {
+            let speedData = speed.data.concat([{x: [data.points[0].customdata[0]], y: [data.points[0].customdata[1]], type: 'scatter', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            Plotly.Fx.hover('speedPlot',[{curveNumber: data.points[0].curveNumber/3, pointNumber: data.points[0].pointNumber}]);
+            Plotly.react('speedPlot', speedData, speed.layout);
+            let eleData = ele.data.concat([{x: [data.points[0].customdata[0]], y: [data.points[0].customdata[2]], type: 'scatter', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            Plotly.Fx.hover('elevationPlot',[{curveNumber: data.points[0].curveNumber/3, pointNumber: data.points[0].pointNumber}]);
+            Plotly.react('elevationPlot', eleData, ele.layout);
+        });
+        document.getElementById('mapPlot').on('plotly_unhover', function(data) {
+            Plotly.Fx.hover('speedPlot', []);
+            Plotly.react('speedPlot', speed.data, speed.layout);
+            Plotly.Fx.hover('elevationPlot', []);
+            Plotly.react('elevationPlot', ele.data, ele.layout);
+        });
+    });
 }
 
 function createMapPlot(dff) {
-    console.log(dff);
     var bounds = {minLat: 90, maxLat: -90, minLon: 180, maxLon: -180};
     var data = dff.reduce(function(data, row) {
+        let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
         let lons = row.get('lon'), lats = row.get('lat');
+        let speeds = row.get('inst_speed'), eles = row.get('ele'), dists = row.get('cumul_dist');
         lons.forEach(function(lon, i) {
             bounds.minLon = Math.min(bounds.minLon, Math.min(...lon));
             bounds.maxLon = Math.max(bounds.maxLon, Math.max(...lon));
             bounds.minLat = Math.min(bounds.minLat, Math.min(...lats[i]));
             bounds.maxLat = Math.max(bounds.maxLat, Math.max(...lats[i]));
+            let customdataT = [dists[i], speeds[i], eles[i]];
+            const customdata = customdataT.reduce(
+                ($, row) => row.map((_, i) => [...($[i] || []), row[i]]), 
+                []
+            )
+            console.log(customdata);
             dataT = {
                 type: 'scattermapbox',
                 mode: 'markers+lines',
-                name: moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss'),
+                name: date,
                 lon: lon,
-                lat: lats[i]
+                lat: lats[i],
+                customdata: customdata,
+                hovertemplate: 'Distance: %{customdata[0]:.2f} m<br>Vitesse: %{customdata[1]:.2f} km/h<br>Elevation: %{customdata[2]} m'
             };
             data.push(dataT);
+            data.push({type:'scattermapbox',mode:'markers',lon:[lon[0]],lat:[lats[i][0]],marker:{size:8,color:'green'},name:date,showlegend:false,hovertemplate:'Départ'});
+            data.push({type:'scattermapbox',mode:'markers',lon:[lon[lon.length-1]],lat:[lats[i][lats[i].length-1]],marker:{size:8,color:'red'},name:date,showlegend:false,hovertemplate:'Arrivé'});
         });
         return data;
     }, []);
-    // console.log(data);
+
     let zc = zoomCenter(bounds);
     let layoutmap = {
         'mapbox': {
@@ -434,31 +468,94 @@ function createMapPlot(dff) {
         },
         'showlegend':data.length>3,
         "uirevision":1
-    }
-    // var layout = {
-    //     title: 'Canadian cities',
-    //     // geo: {
-    //     //     scope: 'europe',
-    //     //     resolution: 50,
-    //     //     lonaxis: {
-    //     //         'range': [-130, -55]
-    //     //     },
-    //     //     lataxis: {
-    //     //         'range': [40, 70]
-    //     //     },
-    //     //     showrivers: true,
-    //     //     rivercolor: '#fff',
-    //     //     showlakes: true,
-    //     //     lakecolor: '#fff',
-    //     //     showland: true,
-    //     //     landcolor: '#EAEAAE',
-    //     //     countrycolor: '#d3d3d3',
-    //     //     countrywidth: 1.5,
-    //     //     subunitcolor: '#d3d3d3'
-    //     // }
-    // };
+    };
 
-    Plotly.newPlot('mapPlot', data, layoutmap);
+    return {data:data, layout:layoutmap};
+}
+
+function createSpeedPlot(dff) {
+    console.log(dff);
+    var data = dff.reduce(function(data, row) {
+        let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
+        let speeds = row.get('inst_speed'), dists = row.get('cumul_dist');
+        speeds.forEach(function(speed, i) {
+            dataT = {
+                type: 'scatter',
+                mode: 'markers+lines',
+                name: date,
+                x: dists[i],
+                y: speed,
+                line:{shape:'spline',smoothing:1.3},
+                marker: {opacity: 0}
+            };
+            data.push(dataT);
+        });
+        return data;
+    }, []);
+    let layoutspeed = {
+        height:300,
+        margin: {
+            t:30,
+            b:30
+        },
+        yaxis: {
+            title:'vitesse'
+        },
+        xaxis: {
+            title:'distance',
+            ticksuffix:'m'
+        },
+        // hovermode:'closest',
+        // hoverdistance:50,
+        // dragmode:'select',
+        // selectdirection:'h',
+        showlegend: data.length>1,
+        uirevision: 1
+    }
+
+    return {data:data, layout:layoutspeed};
+}
+
+function createElevationPlot(dff) {
+    var data = dff.reduce(function(data, row) {
+        let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
+        let eles = row.get('ele'), dists = row.get('cumul_dist');
+        eles.forEach(function(ele, i) {
+            dataT = {
+                type: 'scatter',
+                mode: 'markers+lines',
+                name: date,
+                x: dists[i],
+                y: ele,
+                line:{shape:'spline',smoothing:1.3},
+                marker: {opacity: 0}
+            };
+            data.push(dataT);
+        });
+        return data;
+    }, []);
+    let layoutele = {
+        height:300,
+        margin: {
+            t:30,
+            b:30
+        },
+        yaxis: {
+            title:'elevation'
+        },
+        xaxis: {
+            title:'distance',
+            ticksuffix:'m'
+        },
+        // hovermode:'closest',
+        // hoverdistance:50,
+        // dragmode:'select',
+        // selectdirection:'h',
+        showlegend: data.length>1,
+        uirevision: 1
+    }
+
+    return {data:data, layout:layoutele};
 }
 
 var DataFrame = dfjs.DataFrame;
