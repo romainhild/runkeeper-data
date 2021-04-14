@@ -197,11 +197,13 @@ function plotGraph(typeStat, by, avg) {
             isTime = true;
             dff = dff.map(row => row.set('aggregation', moment.unix(row.get('aggregation')).utc().format()));
             layout['yaxis']['tickformat'] = '%H:%M:%S';
+            hoverformat = '%{y|%H:%M:%S}';
         }
         else {
             isTime = true;
             dff = dff.map(row => row.set('aggregation', moment.unix(row.get('aggregation')).utc().format()));
             layout['yaxis']['tickformat'] = '%M:%S';
+            hoverformat = '%{y|%M:%S}';
         }
     }
     let y = dff.toArray("aggregation");
@@ -376,6 +378,11 @@ function createModalPlots(dff, data) {
         gpx.tracks.forEach(track => pts.push(track.points.map(pt => moment(pt.time))));
         return pts;
     });
+    dff = dff.withColumn('cumul_times', function(row) {
+        if( !row.get('gpx') )
+            return;
+        return row.get('times').map(tt => {t0 = tt[0]; return tt.map( t => {t1 = moment.duration(t.diff(t0)); return Math.trunc(t1.asMinutes())+':'+t1.seconds().toString().padStart(2, '0');})});
+    });
     dff = dff.withColumn('cumul_dist', function(row) {
         if( !row.get('gpx') )
             return;
@@ -392,13 +399,14 @@ function createModalPlots(dff, data) {
         return movingSpeed(dist, times);
     });
     let map = createMapPlot(dff);
+    // console.log(map.data);
     let speed = createSpeedPlot(dff);
     let ele = createElevationPlot(dff);
 
     $('#activityModal').on('shown.bs.modal', function (e) {
         Plotly.newPlot('mapPlot', map.data, map.layout);
         Plotly.newPlot('speedPlot', speed.data, speed.layout);
-        Plotly.newPlot('elevationPlot', ele.data, ele.layout);   
+        Plotly.newPlot('elevationPlot', ele.data, ele.layout);
 
         document.getElementById('mapPlot').on('plotly_hover', function(data) {
             let speedData = speed.data.concat([{x: [data.points[0].customdata[0]], y: [data.points[0].customdata[1]], type: 'scatter', mode: 'markers', marker:{size:8}, showlegend: false}]);
@@ -414,6 +422,36 @@ function createModalPlots(dff, data) {
             Plotly.Fx.hover('elevationPlot', []);
             Plotly.react('elevationPlot', ele.data, ele.layout);
         });
+
+        document.getElementById('speedPlot').on('plotly_hover', function(data) {
+            let mapData = map.data.concat([{lon: [data.points[0].customdata[1]], lat: [data.points[0].customdata[2]], type:'scattermapbox', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            // Plotly.Fx.hover('mapPlot', [{curveNumber: data.points[0].curveNumber*3, pointNumber: data.points[0].pointNumber}], 'mapbox');
+            // Plotly.Fx.hover('mapPlot', []), 'mapbox');
+            Plotly.react('mapPlot', mapData, map.layout);
+            let eleData = ele.data.concat([{x: [data.points[0].x], y: [data.points[0].customdata[0]], type: 'scatter', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            Plotly.Fx.hover('elevationPlot',[{curveNumber: data.points[0].curveNumber, pointNumber: data.points[0].pointNumber}]);
+            Plotly.react('elevationPlot', eleData, ele.layout);
+        });
+        document.getElementById('speedPlot').on('plotly_unhover', function(data) {
+            Plotly.Fx.hover('mapPlot', [], 'mapbox');
+            Plotly.react('mapPlot', map.data, map.layout);
+            Plotly.Fx.hover('elevationPlot', []);
+            Plotly.react('elevationPlot', ele.data, ele.layout);
+        });
+
+        document.getElementById('elevationPlot').on('plotly_hover', function(data) {
+            let mapData = map.data.concat([{lon: [data.points[0].customdata[1]], lat: [data.points[0].customdata[2]], type:'scattermapbox', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            Plotly.react('mapPlot', mapData, map.layout);
+            let speedData = speed.data.concat([{x: [data.points[0].x], y: [data.points[0].customdata[0]], type: 'scatter', mode: 'markers', marker:{size:8}, showlegend: false}]);
+            Plotly.Fx.hover('speedPlot',[{curveNumber: data.points[0].curveNumber, pointNumber: data.points[0].pointNumber}]);
+            Plotly.react('speedPlot', speedData, speed.layout);
+        });
+        document.getElementById('elevationPlot').on('plotly_unhover', function(data) {
+            Plotly.Fx.hover('mapPlot', [], 'mapbox');
+            Plotly.react('mapPlot', map.data, map.layout);
+            Plotly.Fx.hover('speedPlot', []);
+            Plotly.react('speedPlot', speed.data, speed.layout);
+        });
     });
 }
 
@@ -422,18 +460,17 @@ function createMapPlot(dff) {
     var data = dff.reduce(function(data, row) {
         let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
         let lons = row.get('lon'), lats = row.get('lat');
-        let speeds = row.get('inst_speed'), eles = row.get('ele'), dists = row.get('cumul_dist');
+        let speeds = row.get('inst_speed'), eles = row.get('ele'), dists = row.get('cumul_dist'), times = row.get('cumul_times');
         lons.forEach(function(lon, i) {
             bounds.minLon = Math.min(bounds.minLon, Math.min(...lon));
             bounds.maxLon = Math.max(bounds.maxLon, Math.max(...lon));
             bounds.minLat = Math.min(bounds.minLat, Math.min(...lats[i]));
             bounds.maxLat = Math.max(bounds.maxLat, Math.max(...lats[i]));
-            let customdataT = [dists[i], speeds[i], eles[i]];
+            let customdataT = [dists[i], speeds[i], eles[i], times[i]];
             const customdata = customdataT.reduce(
                 ($, row) => row.map((_, i) => [...($[i] || []), row[i]]), 
                 []
             )
-            console.log(customdata);
             dataT = {
                 type: 'scattermapbox',
                 mode: 'markers+lines',
@@ -441,7 +478,8 @@ function createMapPlot(dff) {
                 lon: lon,
                 lat: lats[i],
                 customdata: customdata,
-                hovertemplate: 'Distance: %{customdata[0]:.2f} m<br>Vitesse: %{customdata[1]:.2f} km/h<br>Elevation: %{customdata[2]} m'
+                hovertemplate: 'Distance: %{customdata[0]:.2f} m<br>Vitesse: %{customdata[1]:.2f} km/h<br>Elevation: %{customdata[2]} m<br>Temps: %{customdata[3]}',
+                // subplot: 'mapbox'
             };
             data.push(dataT);
             data.push({type:'scattermapbox',mode:'markers',lon:[lon[0]],lat:[lats[i][0]],marker:{size:8,color:'green'},name:date,showlegend:false,hovertemplate:'Départ'});
@@ -474,11 +512,16 @@ function createMapPlot(dff) {
 }
 
 function createSpeedPlot(dff) {
-    console.log(dff);
     var data = dff.reduce(function(data, row) {
         let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
         let speeds = row.get('inst_speed'), dists = row.get('cumul_dist');
+        let lons = row.get('lon'), lats = row.get('lat'), eles = row.get('ele'), times = row.get('cumul_times');
         speeds.forEach(function(speed, i) {
+            let customdataT = [eles[i], lons[i], lats[i], times[i]];
+            const customdata = customdataT.reduce(
+                ($, row) => row.map((_, i) => [...($[i] || []), row[i]]), 
+                []
+            )
             dataT = {
                 type: 'scatter',
                 mode: 'markers+lines',
@@ -486,7 +529,10 @@ function createSpeedPlot(dff) {
                 x: dists[i],
                 y: speed,
                 line:{shape:'spline',smoothing:1.3},
-                marker: {opacity: 0}
+                marker: {opacity: 0},
+                customdata: customdata,
+                hovertemplate: 'Distance: %{x:.2f} m<br>Vitesse: %{y:.2f} km/h<br>Elevation: %{customdata[0]} m<br>Temps: %{customdata[3]}',
+
             };
             data.push(dataT);
         });
@@ -520,7 +566,13 @@ function createElevationPlot(dff) {
     var data = dff.reduce(function(data, row) {
         let date = moment(row.get('date')).utc().format('YYYY-MM-DD HH:mm:ss');
         let eles = row.get('ele'), dists = row.get('cumul_dist');
+        let lons = row.get('lon'), lats = row.get('lat'), speeds = row.get('inst_speed'), times = row.get('cumul_times');
         eles.forEach(function(ele, i) {
+            let customdataT = [speeds[i], lons[i], lats[i], times[i]];
+            const customdata = customdataT.reduce(
+                ($, row) => row.map((_, i) => [...($[i] || []), row[i]]), 
+                []
+            )
             dataT = {
                 type: 'scatter',
                 mode: 'markers+lines',
@@ -528,7 +580,9 @@ function createElevationPlot(dff) {
                 x: dists[i],
                 y: ele,
                 line:{shape:'spline',smoothing:1.3},
-                marker: {opacity: 0}
+                marker: {opacity: 0},
+                customdata: customdata,
+                hovertemplate: 'Distance: %{x:.2f} m<br>Vitesse: %{customdata[0]:.2f} km/h<br>Elevation: %{y} m<br>Temps: %{customdata[3]}',
             };
             data.push(dataT);
         });
@@ -592,7 +646,7 @@ let periods = {
 plotGraph("mean_speed", "date", 1);
 updateCards({});
 
-var data = df.sortBy("date", true).toCollection();
+var datatable = df.sortBy("date", true).toCollection();
 var $table = $('#table')
 $table.bootstrapTable({
     clickToSelect: true,
@@ -601,7 +655,7 @@ $table.bootstrapTable({
     showButtonText: true,
     toolbar: "#toolbar",
     onClickCell: clickCell,
-    data: data})
+    data: datatable})
 
 let categorySelect = document.getElementById("tableCategory");
 let categories = df.unique('category').sortBy('category').toArray('category');
@@ -618,7 +672,11 @@ categorySelect.addEventListener('change', (event) => {
         filter = {};
     else
         filter = {category: cat};
-    console.log(filter);
     $table.bootstrapTable('filterBy', filter)
 });
 
+// let datamap = [{lon: [7.7682], lat:[48.56654], type: 'scattermapbox', mode: 'markers+lines'}];
+// let layoutmap = {mapbox: {style: 'basic', accesstoken: mapbox_token, center: {lon: 7.7682, lat: 48.56654}, zoom: 18}, height: 350, margin: {t: 30, b: 0}, uirevision: 1};
+// let config = {locale: 'fr', responsive: true};
+// Plotly.newPlot('testmap', datamap, layoutmap, config);
+// Plotly.Fx.hover('testmap', [{curveNumber:0, pointNumber:0}], 'mapbox');
