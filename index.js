@@ -25,13 +25,7 @@ const rkCsv = {
 
 const secrets = require('./secrets');
 
-var con = mysql.createConnection({
-    host: 'localhost',
-    user: 'runkeeper',
-    password: secrets.db_rk_password,
-    database: 'runkeeper'
-});
-con.connect();
+var con = require('./db');
 
 app.set('view engine', 'pug');
 app.use(express.text());
@@ -130,21 +124,9 @@ function update() {
         if(err) {
             return console.log(err);
         }
-        const gpxFiles = files.filter(el => path.extname(el) === '.gpx').forEach(el => fs.readFile(path.join("tmp", el), 'utf8', function(err, data) {
-            if(err) {
-                return console.log(err);
-            }
-            con.query("INSERT INTO gpx (data, name) VALUES (?, ?)", [data, el], function(err, result) {
-                if(err) {
-                    if(err.errno != 1062) throw err;
-                    return;
-                }
-            });
-        }));
         fs.readFile(path.join("tmp", "cardioActivities.csv"), 'utf8', function(err, data) {
             parse(data, {columns: true}, function(err, rows) {
                 rows.forEach(function(row) {
-                    // console.log(row);
                     var keys = [], values = [];
                     Object.keys(rkCsv).forEach(function(k) {
                         if( k in row && row[k] ) {
@@ -161,13 +143,16 @@ function update() {
                         }
                     });
                     if( "GPX File" in row && row["GPX File"] ) {
-                        con.query("SELECT id FROM gpx WHERE name = ?", [row["GPX File"]], function(err, result) {
-                            if(err) throw err;
-                            if( result && result.length > 0 ) {
-                                keys.push("gpx");
-                                values.push(result[0].id);
+                        fs.readFile(path.join("tmp", row["GPX File"]), 'utf8', function(err, data) {
+                            if(err) {
+                                return console.log(err);
                             }
-                            insertActivity(con, keys, values)
+                            con.query("INSERT INTO gpx (data, name) VALUES (?, ?)", [data, row["GPX File"]], function(err, result) {
+                                if(err) throw err;
+                                keys.push("gpx");
+                                values.push(result.insertId);
+                                insertActivity(con, keys, values);
+                            });
                         });
                     }
                     else {
